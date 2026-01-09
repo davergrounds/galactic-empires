@@ -1,0 +1,362 @@
+1:const express = require('express');
+2:const cors = require('cors');
+3:const path = require('path');
+4:
+5:const app = express();
+6:app.use(cors());
+7:app.use(express.json());
+8:app.use(express.static(path.join(__dirname, 'public')));
+9:
+10:// =====================
+11:// Constants
+12:// =====================
+13:const JUMPSHIP_CAPACITY = 8;
+14:const SHIPYARD_MAX_SPEND_PER_TURN = 10;
+15:
+16:const COST = {
+17:  JumpShip: 10,
+18:  Scout: 3,
+19:  Striker: 2,
+20:  Escort: 1,
+21:  Blocker: 1,
+22:  Mine: 1,
+23:  Lab: 3,
+24:  Shipyard: 10,
+25:};
+26:
+27:const HITS = {
+28:  JumpShip: 6,
+29:  Scout: 1,
+30:  Striker: 1,
+31:  Escort: 1,
+32:  Blocker: 2,
+33:  Mine: 1,
+34:  Shipyard: 6,
+35:  Lab: 1,
+36:};
+37:
+38:// =====================
+39:// Game State
+40:// =====================
+41:let game = {
+42:  turn: 1,
+43:  nextUnitId: 30,
+44:  lastTurnLog: [],
+45:  players: {
+46:    ithaxi: { faction: 'ithaxi', resources: 50 },
+47:    hive: { faction: 'hive', resources: 50 },
+48:  },
+49:  systems: [
+50:    { id: 'ITH-HOME', x: 0, y: 0, owner: 'ithaxi', value: 6, resources: 5 },
+51:    { id: 'HIVE-HOME', x: 5, y: 5, owner: 'hive', value: 6, resources: 5 },
+52:    { id: 'MID-1', x: 2, y: 2, owner: null, value: 4, resources: 0 },
+53:    { id: 'MID-2', x: 3, y: 3, owner: null, value: 4, resources: 0 },
+54:  ],
+55:  units: [
+56:    { id: 1, type: 'JumpShip', faction: 'ithaxi', systemId: 'ITH-HOME', hitsRemaining: 6, cargo: [], inTransit: null },
+57:    { id: 2, type: 'Striker', faction: 'ithaxi', systemId: 'ITH-HOME', hitsRemaining: 1 },
+58:    { id: 3, type: 'Escort', faction: 'ithaxi', systemId: 'ITH-HOME', hitsRemaining: 1 },
+59:    { id: 4, type: 'Shipyard', faction: 'ithaxi', systemId: 'ITH-HOME', hitsRemaining: 6, buildQueue: [] },
+60:    { id: 5, type: 'Mine', faction: 'ithaxi', systemId: 'ITH-HOME', hitsRemaining: 1, mineCooldown: 0 },
+61:
+62:    { id: 8, type: 'JumpShip', faction: 'hive', systemId: 'HIVE-HOME', hitsRemaining: 6, cargo: [], inTransit: null },
+63:    { id: 9, type: 'Striker', faction: 'hive', systemId: 'HIVE-HOME', hitsRemaining: 1 },
+64:    { id: 10, type: 'Escort', faction: 'hive', systemId: 'HIVE-HOME', hitsRemaining: 1 },
+65:    { id: 11, type: 'Shipyard', faction: 'hive', systemId: 'HIVE-HOME', hitsRemaining: 6, buildQueue: [] },
+66:    { id: 12, type: 'Mine', faction: 'hive', systemId: 'HIVE-HOME', hitsRemaining: 1, mineCooldown: 0 },
+67:  ],
+68:};
+69:
+70:// =====================
+71:// Helpers
+72:// =====================
+73:function getSystem(id) {
+74:  return game.systems.find(s => s.id === id);
+75:}
+76:
+77:function findUnit(id) {
+78:  return game.units.find(u => u.id === id);
+79:}
+80:
+81:function createUnit(type, faction, systemId) {
+82:  const u = {
+83:    id: game.nextUnitId++,
+84:    type,
+85:    faction,
+86:    systemId,
+87:    hitsRemaining: HITS[type] || 1,
+88:  };
+89:  if (type === 'JumpShip') {
+90:    u.cargo = [];
+91:    u.inTransit = null;
+92:  }
+93:  if (type === 'Shipyard') {
+94:    u.buildQueue = [];
+95:  }
+96:  if (type === 'Mine') {
+97:    u.mineCooldown = 1;
+98:  }
+99:  return u;
+100:}
+101:
+102:function cargoUsed(ship) {
+103:  let used = 0;
+104:  for (const entry of ship.cargo || []) {
+105:    if (typeof entry === 'number') {
+106:      const u = findUnit(entry);
+107:      used += (u && u.type === 'Shipyard') ? 8 : 1;
+108:    } else if (entry.kind === 'resource') {
+109:      used += entry.amount;
+110:    }
+111:  }
+112:  return used;
+113:}
+114:
+115:// =====================
+116:// API
+117:// =====================
+118:app.get('/state', (req, res) => res.json(game));
+119:
+120:app.post('/order/move', (req, res) => {
+121:  const { faction, unitId, toSystemId } = req.body;
+122:  const u = findUnit(unitId);
+123:  if (!u || u.faction !== faction) return res.json({ success: false });
+124:  if (u.type !== 'JumpShip') return res.json({ success: false });
+125:  u.inTransit = toSystemId;
+126:  res.json({ success: true });
+127:});
+128:
+129:app.post('/order/produce', (req, res) => {
+130:  const { faction, shipyardId, units } = req.body;
+131:
+132:  const sy = game.units.find(
+133:    u => u.id === shipyardId && u.faction === faction && u.type === 'Shipyard'
+134:  );
+135:  if (!sy) return res.json({ success: false, error: 'Shipyard not found' });
+136:  if (!Array.isArray(units)) return res.json({ success: false, error: 'units must be an array' });
+137:
+138:  sy.buildQueue = sy.buildQueue || [];
+139:
+140:  for (const item of units) {
+141:    const type = item.type;
+142:    const count = Math.max(0, Math.floor(Number(item.count) || 0));
+143:    if (!COST[type] || count <= 0) continue;
+144:
+145:    for (let i = 0; i < count; i++) sy.buildQueue.push({ type });
+146:  }
+147:
+148:  res.json({ success: true, queued: sy.buildQueue.length });
+149:});
+150:
+151:
+152:app.post('/order/loadResources', (req, res) => {
+153:  const { faction, jumpShipId, amount } = req.body;
+154:  const ship = findUnit(jumpShipId);
+155:  if (!ship || ship.type !== 'JumpShip') return res.json({ success: false });
+156:  const sys = getSystem(ship.systemId);
+157:  if (!sys || sys.resources < amount) return res.json({ success: false });
+158:
+159:  if (cargoUsed(ship) + amount > JUMPSHIP_CAPACITY) return res.json({ success: false });
+160:
+161:  sys.resources -= amount;
+162:  ship.cargo.push({ kind: 'resource', amount });
+163:  res.json({ success: true });
+164:});
+165:
+166:app.post('/order/unload', (req, res) => {
+167:  const { faction, jumpShipId, all } = req.body;
+168:  const ship = findUnit(jumpShipId);
+169:  const sys = getSystem(ship.systemId);
+170:  if (!ship || !sys) return res.json({ success: false });
+171:
+172:  for (const entry of ship.cargo) {
+173:    if (entry.kind === 'resource') sys.resources += entry.amount;
+174:  }
+175:  ship.cargo = [];
+176:  res.json({ success: true });
+177:});
+178:
+179:
+180:// Queue builds for ONE shipyard only
+181:app.post('/order/produce', (req, res) => {
+182:  const { faction, shipyardId, units } = req.body;
+183:
+184:  const sy = game.units.find(
+185:    u => u.id === shipyardId &&
+186:         u.faction === faction &&
+187:         u.type === 'Shipyard'
+188:  );
+189:
+190:  if (!sy) {
+191:    return res.json({ success: false, error: 'Shipyard not found' });
+192:  }
+193:
+194:  if (!Array.isArray(units)) {
+195:    return res.json({ success: false, error: 'Units must be an array' });
+196:  }
+197:
+198:  sy.buildQueue = sy.buildQueue || [];
+199:
+200:  for (const item of units) {
+201:    const type = item.type;
+202:    const count = Math.max(0, Math.floor(item.count || 0));
+203:
+204:    if (!COST[type] || count <= 0) continue;
+205:
+206:    for (let i = 0; i < count; i++) {
+207:      sy.buildQueue.push({ type });
+208:    }
+209:  }
+210:
+211:  res.json({
+212:    success: true,
+213:    queued: sy.buildQueue.length
+214:  });
+215:});
+216:
+217:
+218:
+219:// =====================
+220:// Resolve Turn
+221:// =====================
+222:app.post('/resolveTurn', (req, res) => {
+223:  game.lastTurnLog = [];
+224:
+225:  // Move JumpShips
+226:  for (const u of game.units) {
+227:    if (u.type === 'JumpShip' && u.inTransit) {
+228:      u.systemId = u.inTransit;
+229:      u.inTransit = null;
+230:    }
+231:  }
+232:
+233:  
+234:// 2) Shipyard production (Rule B: SKIP unaffordable; NO PARTIAL BUILDS)
+235:// Build as many COMPLETE units as possible, spending up to 10 resources per shipyard.
+236:// If an item can't be afforded, skip it (leave it in queue) and try later items.
+237:for (const sy of game.units) {
+238:  if (sy.type !== 'Shipyard') continue;
+239:  if (!sy.systemId) continue;
+240:
+241:  ensureBuildQueue(sy);
+242:  if (sy.buildQueue.length === 0) continue;
+243:
+244:  const sysId = sy.systemId;
+245:  const sys = getSystem(sysId);
+246:  if (!sys) continue;
+247:
+248:  // resources available at START of turn (shared across shipyards in same system)
+249:  let available = startResources.get(sysId) ?? 0;
+250:  let spendLeft = SHIPYARD_MAX_SPEND_PER_TURN;
+251:
+252:  let spent = 0;
+253:  let built = 0;
+254:
+255:  // Scan forward once; build what we can and remove built items.
+256:  // Skipped items remain in queue.
+257:  for (let i = 0; i < sy.buildQueue.length && spendLeft > 0; ) {
+258:    const job = sy.buildQueue[i];
+259:    const type = job?.type;
+260:    const cost = COST[type];
+261:
+262:    // bad entry -> drop it
+263:    if (!type || !cost) {
+264:      sy.buildQueue.splice(i, 1);
+265:      continue;
+266:    }
+267:
+268:    // If affordable within this shipyard cap + available pool, build it now
+269:    if (cost <= spendLeft && cost <= available) {
+270:      available -= cost;
+271:      spendLeft -= cost;
+272:      spent += cost;
+273:
+274:      game.units.push(createUnit(type, sy.faction, sy.systemId));
+275:      sy.buildQueue.splice(i, 1); // remove built item
+276:      built++;
+277:      continue;
+278:    }
+279:
+280:    // otherwise skip it and try the next entry
+281:    i++;
+282:  }
+283:
+284:  // Commit spend to the real system resource pool
+285:  if (spent > 0) {
+286:    sys.resources = Math.max(0, sys.resources - spent);
+287:  }
+288:
+289:  // Update shared pool for other shipyards in this same system this turn
+290:  startResources.set(sysId, available);
+291:
+292:  if (spent > 0 || built > 0) {
+293:    log.push(`[Shipyard ${sy.id} @ ${sysId}] built=${built}, spent=${spent}, queueLeft=${sy.buildQueue.length}`);
+294:  }
+295:}
+296:
+297:
+298:
+299:    sys.resources = available;
+300:    sy.buildQueue = remaining;
+301:  }
+302:
+303:  // Mining
+304:  for (const sys of game.systems) {
+305:    const mines = game.units.filter(u =>
+306:      u.type === 'Mine' &&
+307:      u.systemId === sys.id &&
+308:      u.mineCooldown === 0
+309:    ).length;
+310:
+311:    sys.resources += Math.min(mines, sys.value);
+312:  }
+313:
+314:  for (const u of game.units) {
+315:    if (u.type === 'Mine' && u.mineCooldown > 0) u.mineCooldown--;
+316:  }
+317:
+318:  game.turn++;
+319:  res.json({ success: true, turn: game.turn });
+320:});
+321:
+322:app.get('/routes', (req, res) => {
+323:  try {
+324:    const stack = (app.router && app.router.stack) || (app._router && app._router.stack) || [];
+325:    const out = [];
+326:
+327:    for (const layer of stack) {
+328:      if (!layer) continue;
+329:
+330:      // Direct routes
+331:      if (layer.route && layer.route.path) {
+332:        const methods = Object.keys(layer.route.methods || {})
+333:          .map(m => m.toUpperCase())
+334:          .join(',');
+335:        out.push(`${methods} ${layer.route.path}`);
+336:        continue;
+337:      } 
+338:
+339:      // Nested routers (best-effort)
+340:      if (layer.handle && layer.handle.stack) {
+341:        for (const l2 of layer.handle.stack) {
+342:          if (l2?.route?.path) {
+343:            const methods = Object.keys(l2.route.methods || {})
+344:              .map(m => m.toUpperCase())
+345:              .join(',');
+346:            out.push(`${methods} ${l2.route.path}`);
+347:          }
+348:        }
+349:      }
+350:    }
+351:
+352:    res.json(out.sort());
+353:  } catch (e) {
+354:    res.json({ success: false, error: String(e) });
+355:  }
+356:});
+357:
+358:
+359:
+360:// =====================
+361:const PORT = 3000;
+362:app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
