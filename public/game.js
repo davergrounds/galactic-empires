@@ -388,10 +388,11 @@ You chose to open as: ${openAs}
       saveSessionToStorage();
       setUrl(session.gameId, session.code);
 
-      showStatus('Game created. Joined as your chosen faction.');
-      closeOverlay();
-      await refresh(true);
-    });
+showStatus('Game created. Copy the links/codes above. Close this panel when ready.');
+// Do NOT auto-close — keep the codes visible until the user closes the overlay.
+await refresh(true);
+
+});
   }
 
   if (joinBtn) {
