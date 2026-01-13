@@ -749,18 +749,15 @@ await refresh(true);
       ctx.beginPath(); ctx.arc(x, y, size - 2, 0, Math.PI*2); ctx.fill(); ctx.stroke();
       ctx.fillStyle = '#000';
       ctx.beginPath(); ctx.arc(x, y, 2.5, 0, Math.PI*2); ctx.fill();
-    } else {
+       } else {
       ctx.beginPath(); ctx.arc(x, y, size, 0, Math.PI*2); ctx.fill(); ctx.stroke();
     }
-function drawUnitLabel(u, x, y, size, isGhost = false) {
-  ctx.save();
-  ctx.fillStyle = 'red';
-  ctx.font = 'bold 20px Arial';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('TEST', x, y);
-  ctx.restore();
-}
+
+    drawUnitLabel(u, x, y, size, isGhost);
+
+    ctx.restore();
+  }
+
 
 
   function drawSquare(x, y, s) { ctx.beginPath(); ctx.rect(x - s, y - s, s*2, s*2); }
@@ -790,7 +787,7 @@ function drawUnitLabel(u, x, y, size, isGhost = false) {
     }
     ctx.closePath();
   }
-function unitGlyph(type) {
+  function unitGlyph(type) {
   // Short + distinct. (Avoids confusion at a glance.)
   if (type === 'JumpShip') return 'J';
   if (type === 'Shipyard') return 'SY';
@@ -802,7 +799,7 @@ function unitGlyph(type) {
   return '?';
 }
 
-function drawUnitLabel(u, x, y, size, isGhost = false) {
+  function drawUnitLabel(u, x, y, size, isGhost = false) {
   const g = unitGlyph(u.type);
   if (!g) return;
 
@@ -1375,6 +1372,7 @@ function drawUnitLabel(u, x, y, size, isGhost = false) {
 
   init();
 })();
+
 
 
 
