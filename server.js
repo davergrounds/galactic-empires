@@ -174,6 +174,7 @@ function generateNewGame(cfg) {
     winner: null,
 
     ready: { ithaxi: false, hive: false }, // both must ready
+    resignIntent: { ithaxi: false, hive: false }, // toggleable "armed resign" per player
 
     map: { w: mapW, h: mapH },
 
@@ -610,6 +611,10 @@ function resolveTurnInternal(game) {
   // turn ready resets each turn
   game.ready.ithaxi = false;
   game.ready.hive = false;
+
+  // resign intent resets each turn too (optional, but keeps it safe)
+  game.resignIntent.ithaxi = false;
+  game.resignIntent.hive = false;
 }
 
 // =====================
@@ -672,6 +677,7 @@ function maskedStateForViewer(game, faction) {
     gameOver: game.gameOver,
     winner: game.winner,
     ready: { ...game.ready },
+    resignIntent: { ...(game.resignIntent || { ithaxi:false, hive:false }) },
     map: { ...game.map },
     players: game.players,
     techLevels: game.techLevels,
@@ -733,11 +739,12 @@ app.get('/games/:gameId/turn/status', (req, res) => {
     turn: game.turn,
     gameOver: game.gameOver,
     winner: game.winner,
-    ready: { ...game.ready }
+    ready: { ...game.ready },
+    resignIntent: { ...(game.resignIntent || { ithaxi:false, hive:false }) }
   });
 });
 
-// Click ready; if both ready -> resolve immediately
+// Toggle ready (or set explicitly); if both ready -> resolve immediately
 app.post('/games/:gameId/turn/ready', (req, res) => {
   const auth = requireAuth(req, res);
   if (!auth) return;
@@ -748,7 +755,10 @@ app.post('/games/:gameId/turn/ready', (req, res) => {
     return res.json({ success: false, error: 'Game is over', gameId, turn: game.turn, winner: game.winner });
   }
 
-  game.ready[faction] = true;
+  const setVal = (typeof req.body?.set === 'boolean') ? req.body.set : null;
+  if (setVal === null) game.ready[faction] = !game.ready[faction];
+  else game.ready[faction] = !!setVal;
+
   const both = game.ready.ithaxi && game.ready.hive;
 
   if (both) {
@@ -759,15 +769,42 @@ app.post('/games/:gameId/turn/ready', (req, res) => {
       resolved: true,
       turn: game.turn,
       ready: { ...game.ready },
+      resignIntent: { ...(game.resignIntent || { ithaxi:false, hive:false }) },
       gameOver: game.gameOver,
       winner: game.winner
     });
   }
 
-  res.json({ success: true, gameId, resolved: false, turn: game.turn, ready: { ...game.ready } });
+  res.json({
+    success: true,
+    gameId,
+    resolved: false,
+    turn: game.turn,
+    ready: { ...game.ready },
+    resignIntent: { ...(game.resignIntent || { ithaxi:false, hive:false }) }
+  });
 });
 
-// Resign
+// Toggle "resign intent" (does NOT end game)
+app.post('/games/:gameId/resignIntent', (req, res) => {
+  const auth = requireAuth(req, res);
+  if (!auth) return;
+
+  const { game, faction, gameId } = auth;
+
+  if (game.gameOver) {
+    return res.json({ success: false, error: 'Game is over', gameId, turn: game.turn, winner: game.winner });
+  }
+
+  if (!game.resignIntent) game.resignIntent = { ithaxi:false, hive:false };
+  const setVal = (typeof req.body?.set === 'boolean') ? req.body.set : null;
+  if (setVal === null) game.resignIntent[faction] = !game.resignIntent[faction];
+  else game.resignIntent[faction] = !!setVal;
+
+  res.json({ success: true, gameId, resignIntent: { ...game.resignIntent } });
+});
+
+// Resign (CONFIRM)
 app.post('/games/:gameId/resign', (req, res) => {
   const auth = requireAuth(req, res);
   if (!auth) return;
@@ -1039,4 +1076,3 @@ app.post('/games/:gameId/order/research', (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
-
