@@ -752,10 +752,16 @@ await refresh(true);
     } else {
       ctx.beginPath(); ctx.arc(x, y, size, 0, Math.PI*2); ctx.fill(); ctx.stroke();
     }
-drawUnitLabel(u, x, y, size, isGhost);
+function drawUnitLabel(u, x, y, size, isGhost = false) {
+  ctx.save();
+  ctx.fillStyle = 'red';
+  ctx.font = 'bold 20px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('TEST', x, y);
+  ctx.restore();
+}
 
-    ctx.restore();
-  }
 
   function drawSquare(x, y, s) { ctx.beginPath(); ctx.rect(x - s, y - s, s*2, s*2); }
   function drawDiamond(x, y, s) {
@@ -1369,5 +1375,6 @@ function drawUnitLabel(u, x, y, size, isGhost = false) {
 
   init();
 })();
+
 
 
