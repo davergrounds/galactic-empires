@@ -783,7 +783,44 @@ await refresh(true);
     }
     ctx.closePath();
   }
+function unitGlyph(type) {
+  // Short + distinct. (Avoids confusion at a glance.)
+  if (type === 'JumpShip') return 'J';
+  if (type === 'Shipyard') return 'SY';
+  if (type === 'Striker') return 'S';
+  if (type === 'Escort') return 'E';
+  if (type === 'Blocker') return 'B';
+  if (type === 'Mine') return 'M';
+  if (type === 'Lab') return 'L';
+  return '?';
+}
 
+function drawUnitLabel(u, x, y, size, isGhost = false) {
+  const g = unitGlyph(u.type);
+  if (!g) return;
+
+  ctx.save();
+  ctx.globalAlpha = isGhost ? 0.65 : 1;
+
+  // Scale label a bit based on unit size
+  const fontSize = Math.max(10, Math.floor(size * (g.length === 2 ? 0.85 : 0.95)));
+  ctx.font = `bold ${fontSize}px Arial`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  // White text with black outline for readability on any faction color
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = '#000';
+  ctx.fillStyle = '#fff';
+
+  ctx.strokeText(g, x, y);
+  ctx.fillText(g, x, y);
+
+  ctx.restore();
+}
+
+
+  
   function draw() {
     ctx.clearRect(0,0,canvas.width,canvas.height);
     ctx.fillStyle = 'black';
@@ -1331,3 +1368,4 @@ await refresh(true);
 
   init();
 })();
+
