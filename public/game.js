@@ -752,6 +752,7 @@ await refresh(true);
     } else {
       ctx.beginPath(); ctx.arc(x, y, size, 0, Math.PI*2); ctx.fill(); ctx.stroke();
     }
+drawUnitLabel(u, x, y, size, isGhost);
 
     ctx.restore();
   }
@@ -1368,4 +1369,5 @@ function drawUnitLabel(u, x, y, size, isGhost = false) {
 
   init();
 })();
+
 
