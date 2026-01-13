@@ -25,6 +25,13 @@
     button:hover { background: #333; }
     button:disabled { opacity: 0.5; cursor: not-allowed; }
 
+    /* Toggle red/armed state */
+    button.armed {
+      background: #6a1111;
+      border-color: #cc4444;
+    }
+    button.armed:hover { background: #7a1515; }
+
     .row { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
     .row label { flex: 1; font-size: 13px; }
     .row input, .row select {
@@ -125,7 +132,6 @@
 
     .joinRow { display:flex; gap: 10px; margin-top: 8px; }
     .joinRow input { width: 100%; }
-
   </style>
 </head>
 <body>
@@ -211,7 +217,8 @@
       <div id="gameInfo" class="muted">Game: ?</div>
 
       <button id="readyTurnBtn">Ready for Turn Resolution</button>
-      <button id="resignBtn">Resign (Give Victory)</button>
+      <button id="resignBtn">Resign (toggle)</button>
+      <button id="confirmResignBtn" style="display:none;">Confirm Resign Now</button>
 
       <div class="section">
         <div><span class="pill">View</span> <span class="muted">Mouse wheel zoom + drag to pan</span></div>
@@ -289,8 +296,14 @@
           </div>
 
           <div style="margin-top:10px;">
-            <div class="muted">Load unit: click a unit on the map (same system) then press:</div>
-            <button id="loadSelectedUnitBtn" disabled>Load selected unit into JumpShip</button>
+            <div class="muted">Load unit(s): click a unit (or a stack) on the map (same system) then choose how many:</div>
+
+            <div class="row">
+              <label>How many</label>
+              <input id="loadCount" type="number" min="1" value="1">
+            </div>
+
+            <button id="loadSelectedUnitBtn" disabled>Load N selected unit(s) into JumpShip</button>
             <div id="selectedUnitLine" class="muted" style="margin-top:6px;"></div>
           </div>
 
@@ -316,6 +329,11 @@
         <div id="report"></div>
       </div>
 
+      <div class="section">
+        <button id="openSetupBtn">Setup / New Game</button>
+        <div class="muted" style="margin-top:6px;">Clears your saved session and returns you to the setup overlay.</div>
+      </div>
+
       <div id="status"></div>
     </div>
 
@@ -326,5 +344,3 @@
   <script src="/game.js" defer></script>
 </body>
 </html>
-
-
