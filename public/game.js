@@ -59,12 +59,6 @@
     JumpShip: document.getElementById('bJumpShip'),
   };
 
-  // NEW (optional) elements in HTML:
-  // <div id="shipyardQueue" class="muted"></div>
-  // <button id="cancelShipyardQueueBtn">Cancel Shipyard Queue</button>
-  const shipyardQueueEl = document.getElementById('shipyardQueue');
-  const cancelShipyardQueueBtn = document.getElementById('cancelShipyardQueueBtn');
-
   // Cargo UI
   const cargoHint = document.getElementById('cargoHint');
   const selectedJumpShipEl = document.getElementById('selectedJumpShip');
@@ -96,18 +90,17 @@
 
   if (!canvas || !ctx) return;
 
-  const COST = { JumpShip:10, Striker:2, Escort:1, Blocker:1, Mine:1, Lab:3, Shipyard:10 };
-  const TECH_TYPES = ['Striker','Escort','Blocker','Mine','Shipyard','JumpShip','Lab'];
+  const COST = { JumpShip: 10, Striker: 2, Escort: 1, Blocker: 1, Mine: 1, Lab: 3, Shipyard: 10 };
+  const TECH_TYPES = ['Striker', 'Escort', 'Blocker', 'Mine', 'Shipyard', 'JumpShip', 'Lab'];
 
   const FACTION_COLOR = {
     hive: '#35d04a',
     ithaxi: '#ff8a2a',
-    neutral: '#888',
-    contested: '#888'
+    neutral: '#888'
   };
 
   const LS_KEY = 'GE_SESSION'; // stores {gameId, code}
-  let session = { gameId:null, code:null };
+  let session = { gameId: null, code: null };
 
   function loadSessionFromStorage() {
     try {
@@ -115,13 +108,13 @@
       if (!raw) return;
       const obj = JSON.parse(raw);
       if (obj && typeof obj === 'object') session = { gameId: obj.gameId || null, code: obj.code || null };
-    } catch {}
+    } catch { }
   }
   function saveSessionToStorage() {
     localStorage.setItem(LS_KEY, JSON.stringify({ gameId: session.gameId, code: session.code }));
   }
   function clearSession() {
-    session = { gameId:null, code:null };
+    session = { gameId: null, code: null };
     localStorage.removeItem(LS_KEY);
   }
 
@@ -145,7 +138,7 @@
 
   let view = { scale: 80, offsetX: 80, offsetY: 80 };
   let draggingPan = false;
-  let panStart = { x:0, y:0, ox:0, oy:0 };
+  let panStart = { x: 0, y: 0, ox: 0, oy: 0 };
 
   let game = null;
   let yourFaction = null;
@@ -188,9 +181,9 @@
 
   function escapeHtml(s) {
     return String(s ?? '')
-      .replace(/&/g,'&amp;')
-      .replace(/</g,'&lt;')
-      .replace(/>/g,'&gt;');
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
   }
 
   // --------------------
@@ -198,8 +191,8 @@
   // --------------------
   async function apiCreateGame(cfg) {
     const res = await fetch('/games', {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(cfg || {})
     });
     return await res.json();
@@ -230,8 +223,8 @@
     const payload = { gameId, code };
     if (typeof setValue === 'boolean') payload.set = setValue;
     const res = await fetch(`/games/${encodeURIComponent(gameId)}/turn/ready`, {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
     return await res.json();
@@ -240,8 +233,8 @@
   async function apiResignIntent(setValue) {
     const { gameId, code } = session;
     const res = await fetch(`/games/${encodeURIComponent(gameId)}/resignIntent`, {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ gameId, code, set: !!setValue })
     });
     return await res.json();
@@ -250,8 +243,8 @@
   async function apiResign() {
     const { gameId, code } = session;
     const res = await fetch(`/games/${encodeURIComponent(gameId)}/resign`, {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ gameId, code })
     });
     return await res.json();
@@ -260,8 +253,8 @@
   async function apiMove(unitId, toSystemId) {
     const { gameId, code } = session;
     const res = await fetch(`/games/${encodeURIComponent(gameId)}/order/move`, {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ gameId, code, unitId, toSystemId })
     });
     return await res.json();
@@ -270,20 +263,9 @@
   async function apiQueueBuild(shipyardId, units) {
     const { gameId, code } = session;
     const res = await fetch(`/games/${encodeURIComponent(gameId)}/order/produce`, {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ gameId, code, shipyardId, units })
-    });
-    return await res.json();
-  }
-
-  // NEW: cancel all items in a shipyard queue
-  async function apiCancelShipyardQueue(shipyardId) {
-    const { gameId, code } = session;
-    const res = await fetch(`/games/${encodeURIComponent(gameId)}/order/cancelShipyardQueue`, {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({ gameId, code, shipyardId })
     });
     return await res.json();
   }
@@ -291,8 +273,8 @@
   async function apiLoadUnit(unitId, jumpShipId) {
     const { gameId, code } = session;
     const res = await fetch(`/games/${encodeURIComponent(gameId)}/order/load`, {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ gameId, code, unitId, jumpShipId })
     });
     return await res.json();
@@ -301,8 +283,8 @@
   async function apiUnload(jumpShipId, payload) {
     const { gameId, code } = session;
     const res = await fetch(`/games/${encodeURIComponent(gameId)}/order/unload`, {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ gameId, code, jumpShipId, ...payload })
     });
     return await res.json();
@@ -311,8 +293,8 @@
   async function apiLoadResources(jumpShipId, amount) {
     const { gameId, code } = session;
     const res = await fetch(`/games/${encodeURIComponent(gameId)}/order/loadResources`, {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ gameId, code, jumpShipId, amount })
     });
     return await res.json();
@@ -321,8 +303,8 @@
   async function apiQueueResearch(labId, tech, targetLevel) {
     const { gameId, code } = session;
     const res = await fetch(`/games/${encodeURIComponent(gameId)}/order/research`, {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ gameId, code, labId, tech, targetLevel })
     });
     return await res.json();
@@ -331,8 +313,8 @@
   async function apiConvertToShipyard(jumpShipId) {
     const { gameId, code } = session;
     const res = await fetch(`/games/${encodeURIComponent(gameId)}/order/convertToShipyard`, {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ gameId, code, jumpShipId })
     });
     return await res.json();
@@ -356,7 +338,7 @@
     const hiv = data?.join?.hive?.link || '';
 
     createdLinksEl.textContent =
-`Game created!
+      `Game created!
 Game ID: ${data.gameId}
 
 Ithaxi link (send to Ithaxi player):
@@ -478,25 +460,12 @@ You chose to open as: ${openAs}
   // --------------------
   // Panels
   // --------------------
-  function summarizeShipyardQueue(queue) {
-    if (!Array.isArray(queue) || queue.length === 0) return '(empty)';
-    const counts = {};
-    for (const job of queue) {
-      const t = job?.type || '?';
-      counts[t] = (counts[t] || 0) + 1;
-    }
-    const parts = Object.keys(counts).sort().map(k => `${k} x${counts[k]}`);
-    return parts.join(', ');
-  }
-
   function updateBuildPanel() {
     if (!buildHint || !selectedShipyardEl) return;
 
     if (!selectedShipyard) {
       buildHint.textContent = 'Click a Shipyard to build units.';
       selectedShipyardEl.textContent = '';
-      if (shipyardQueueEl) shipyardQueueEl.textContent = '';
-      if (cancelShipyardQueueBtn) cancelShipyardQueueBtn.style.display = 'none';
       setBuildEnabled(false);
       return;
     }
@@ -514,13 +483,6 @@ You chose to open as: ${openAs}
     selectedShipyardEl.textContent =
       `Selected Shipyard: #${selectedShipyard.id} (${selectedShipyard.faction}) @ ${selectedShipyard.systemId} | ` +
       `System R:${sysRes} | Spend cap: ${cap} | Queue entries: ${qEntries}`;
-
-    if (shipyardQueueEl) {
-      shipyardQueueEl.textContent = `Queue: ${summarizeShipyardQueue(queue)}`;
-    }
-    if (cancelShipyardQueueBtn) {
-      cancelShipyardQueueBtn.style.display = qEntries > 0 ? 'block' : 'none';
-    }
 
     setBuildEnabled(true);
   }
@@ -716,8 +678,8 @@ You chose to open as: ${openAs}
     if (scale < 25) return;
 
     const w = canvas.width, h = canvas.height;
-    const topLeft = screenToWorld(0,0);
-    const botRight = screenToWorld(w,h);
+    const topLeft = screenToWorld(0, 0);
+    const botRight = screenToWorld(w, h);
 
     const xMin = Math.floor(Math.min(topLeft.x, botRight.x)) - 1;
     const xMax = Math.ceil(Math.max(topLeft.x, botRight.x)) + 1;
@@ -762,8 +724,8 @@ You chose to open as: ${openAs}
 
     const stacks = [];
     for (const [key, list] of byKey.entries()) {
-      list.sort((a,b)=>a.id-b.id);
-      stacks.push({ kind:'stack', unit:list[0], units:list, sysId: sys.id, stackKey: key });
+      list.sort((a, b) => a.id - b.id);
+      stacks.push({ kind: 'stack', unit: list[0], units: list, sysId: sys.id, stackKey: key });
     }
 
     const typeRank = (t) => {
@@ -778,20 +740,20 @@ You chose to open as: ${openAs}
     };
 
     const items = [];
-    jumpships.slice().sort((a,b) => (a.faction||'').localeCompare(b.faction||'') || a.id-b.id)
-      .forEach(u => items.push({ kind:'unit', unit:u, units:[u], sysId: sys.id, stackKey: null }));
+    jumpships.slice().sort((a, b) => (a.faction || '').localeCompare(b.faction || '') || a.id - b.id)
+      .forEach(u => items.push({ kind: 'unit', unit: u, units: [u], sysId: sys.id, stackKey: null }));
 
-    stacks.slice().sort((a,b) => {
+    stacks.slice().sort((a, b) => {
       const ra = typeRank(a.unit.type), rb = typeRank(b.unit.type);
       if (ra !== rb) return ra - rb;
-      if ((a.unit.faction||'') !== (b.unit.faction||'')) return (a.unit.faction||'').localeCompare(b.unit.faction||'');
+      if ((a.unit.faction || '') !== (b.unit.faction || '')) return (a.unit.faction || '').localeCompare(b.unit.faction || '');
       return a.unit.id - b.unit.id;
     }).forEach(s => items.push(s));
 
     return items;
   }
 
-  function drawSquare(x, y, s) { ctx.beginPath(); ctx.rect(x - s, y - s, s*2, s*2); }
+  function drawSquare(x, y, s) { ctx.beginPath(); ctx.rect(x - s, y - s, s * 2, s * 2); }
   function drawDiamond(x, y, s) {
     ctx.beginPath();
     ctx.moveTo(x, y - s);
@@ -809,10 +771,10 @@ You chose to open as: ${openAs}
   }
   function drawPolygon(x, y, r, sides) {
     ctx.beginPath();
-    for (let i=0;i<sides;i++) {
-      const a = (i / sides) * Math.PI*2 - Math.PI/2;
-      const px = x + Math.cos(a)*r;
-      const py = y + Math.sin(a)*r;
+    for (let i = 0; i < sides; i++) {
+      const a = (i / sides) * Math.PI * 2 - Math.PI / 2;
+      const px = x + Math.cos(a) * r;
+      const py = y + Math.sin(a) * r;
       if (i === 0) ctx.moveTo(px, py);
       else ctx.lineTo(px, py);
     }
@@ -820,6 +782,7 @@ You chose to open as: ${openAs}
   }
 
   function unitGlyph(type) {
+    // Short + distinct. (Avoids confusion at a glance.)
     if (type === 'JumpShip') return 'J';
     if (type === 'Shipyard') return 'SY';
     if (type === 'Striker') return 'S';
@@ -837,11 +800,13 @@ You chose to open as: ${openAs}
     ctx.save();
     ctx.globalAlpha = isGhost ? 0.65 : 1;
 
+    // Scale label a bit based on unit size
     const fontSize = Math.max(10, Math.floor(size * (g.length === 2 ? 0.85 : 0.95)));
     ctx.font = `bold ${fontSize}px Arial`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
+    // White text with black outline for readability on any faction color
     ctx.lineWidth = 3;
     ctx.strokeStyle = '#000';
     ctx.fillStyle = '#fff';
@@ -852,7 +817,7 @@ You chose to open as: ${openAs}
     ctx.restore();
   }
 
-  function drawUnit(u, x, y, isGhost=false, highlight=false) {
+  function drawUnit(u, x, y, isGhost = false, highlight = false) {
     const factionColor = FACTION_COLOR[u.faction] || 'white';
     const outline = highlight ? '#ffffff' : (isGhost ? '#aaa' : '#000');
 
@@ -876,11 +841,11 @@ You chose to open as: ${openAs}
       drawDiamond(x, y, size); ctx.fill(); ctx.stroke();
       if (Array.isArray(u.cargo) && u.cargo.length > 0) {
         ctx.fillStyle = '#fff';
-        ctx.beginPath(); ctx.arc(x + size - 3, y - size + 3, 3, 0, Math.PI*2);
+        ctx.beginPath(); ctx.arc(x + size - 3, y - size + 3, 3, 0, Math.PI * 2);
         ctx.fill();
       }
     } else if (u.type === 'Shipyard') {
-      ctx.beginPath(); ctx.arc(x, y, size, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.arc(x, y, size, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
     } else if (u.type === 'Striker') {
       drawTriangle(x, y, size); ctx.fill(); ctx.stroke();
     } else if (u.type === 'Escort') {
@@ -890,11 +855,11 @@ You chose to open as: ${openAs}
     } else if (u.type === 'Mine') {
       drawPolygon(x, y, size, 8); ctx.fill(); ctx.stroke();
     } else if (u.type === 'Lab') {
-      ctx.beginPath(); ctx.arc(x, y, size - 2, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.arc(x, y, size - 2, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
       ctx.fillStyle = '#000';
-      ctx.beginPath(); ctx.arc(x, y, 2.5, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x, y, 2.5, 0, Math.PI * 2); ctx.fill();
     } else {
-      ctx.beginPath(); ctx.arc(x, y, size, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.arc(x, y, size, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
     }
 
     drawUnitLabel(u, x, y, size, isGhost);
@@ -903,9 +868,9 @@ You chose to open as: ${openAs}
   }
 
   function draw() {
-    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = 'black';
-    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     drawItems = [];
 
@@ -923,11 +888,10 @@ You chose to open as: ${openAs}
       const p = worldToScreen(sys.x, sys.y);
       const r = 18;
 
-      // NEW: color by sys.control (always visible)
-      const control = sys.control || 'neutral';
-      ctx.fillStyle = FACTION_COLOR[control] || FACTION_COLOR.neutral;
+      const owner = sys.owner || 'neutral';
+      ctx.fillStyle = FACTION_COLOR[owner] || FACTION_COLOR.neutral;
       ctx.beginPath();
-      ctx.arc(p.x, p.y, r, 0, Math.PI*2);
+      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.strokeStyle = '#111';
@@ -1017,28 +981,30 @@ You chose to open as: ${openAs}
     for (const sys of game.systems) {
       const p = worldToScreen(sys.x, sys.y);
       const dx = sx - p.x, dy = sy - p.y;
-      if (Math.sqrt(dx*dx + dy*dy) <= 18) return sys;
+      if (Math.sqrt(dx * dx + dy * dy) <= 18) return sys;
     }
     return null;
   }
 
+  // NEW: return draw-item so we have stack info
   function findDrawItemAtScreen(sx, sy) {
     if (!game) return null;
     const list = [...drawItems].reverse();
     for (const item of list) {
       const dx = sx - item.x, dy = sy - item.y;
-      const dist = Math.sqrt(dx*dx + dy*dy);
+      const dist = Math.sqrt(dx * dx + dy * dy);
       if (dist <= item.r) return item;
     }
     return null;
   }
 
+  // Keep old helper for any legacy call sites
   function findItemAtScreen(sx, sy) {
     if (!game) return null;
     const list = [...drawItems].reverse();
     for (const item of list) {
       const dx = sx - item.x, dy = sy - item.y;
-      const dist = Math.sqrt(dx*dx + dy*dy);
+      const dist = Math.sqrt(dx * dx + dy * dy);
       if (dist <= item.r) return item;
     }
     return null;
@@ -1096,14 +1062,11 @@ You chose to open as: ${openAs}
     if (sys) {
       const rText = (sys.resources == null) ? '?' : sys.resources;
       const vText = (sys.value == null) ? '?' : sys.value;
-
-      const ownerText = (sys.owner == null) ? 'Unknown' : sys.owner;
-      const controlText = (sys.control == null) ? 'neutral' : sys.control;
+      const ownerText = (sys.owner == null) ? 'Neutral' : sys.owner;
 
       showTooltip(
         `<b>${escapeHtml(sys.id)}</b><br>
-         Control: ${escapeHtml(controlText)}<br>
-         Owner (visible only if you are there): ${escapeHtml(ownerText)}<br>
+         Owner: ${escapeHtml(ownerText)}<br>
          Resources: ${escapeHtml(rText)}<br>
          Value: ${escapeHtml(vText)}<br>
          Position: (${sys.x}, ${sys.y})`,
@@ -1174,13 +1137,14 @@ You chose to open as: ${openAs}
       return;
     }
 
+    // Other unit: select stack (hit.units) so load-many works
     if (selectedUnit && selectedUnit.id === u.id) {
       selectedUnit = null;
       selectedUnitGroup = null;
       selectedUnitItem = null;
     } else {
       selectedUnit = u;
-      selectedUnitItem = hit;
+      selectedUnitItem = hit; // includes stack list in hit.units
     }
     updateCargoPanel();
     draw();
@@ -1260,7 +1224,7 @@ You chose to open as: ${openAs}
     view.offsetY += (after.y - before.y) * view.scale;
 
     draw();
-  }, { passive:false });
+  }, { passive: false });
 
   if (zoomInBtn) zoomInBtn.addEventListener('click', () => { view.scale = Math.min(260, view.scale * 1.15); draw(); });
   if (zoomOutBtn) zoomOutBtn.addEventListener('click', () => { view.scale = Math.max(30, view.scale / 1.15); draw(); });
@@ -1277,7 +1241,7 @@ You chose to open as: ${openAs}
       const cur = !!(game?.ready && yourFaction && game.ready[yourFaction]);
       const next = !cur;
       showStatus(next ? 'Marked READY (click again to unready)...' : 'Marked NOT READY...');
-      const r = await apiReadyTurn(next).catch(()=>null);
+      const r = await apiReadyTurn(next).catch(() => null);
       if (r?.success) {
         if (r.resolved) showStatus(`Both ready. Turn resolved. Now Turn ${r.turn}.`);
         else showStatus(next ? 'Ready set. Waiting for other player...' : 'Not ready.');
@@ -1296,7 +1260,7 @@ You chose to open as: ${openAs}
       const cur = !!(game?.resignIntent && yourFaction && game.resignIntent[yourFaction]);
       const next = !cur;
       showStatus(next ? 'Resign ARMED (you can cancel). Use Confirm Resign to actually resign.' : 'Resign cancelled.');
-      const r = await apiResignIntent(next).catch(()=>null);
+      const r = await apiResignIntent(next).catch(() => null);
       if (!r?.success) showStatus(`Resign toggle failed: ${r?.error || 'network error'}`);
       await refresh(false);
     });
@@ -1311,20 +1275,9 @@ You chose to open as: ${openAs}
         return;
       }
       showStatus('Resigning...');
-      const r = await apiResign().catch(()=>null);
+      const r = await apiResign().catch(() => null);
       if (r?.success) showStatus(`You resigned. Winner: ${r.winner}`);
       else showStatus(`Resign failed: ${r?.error || 'network error'}`);
-      await refresh(false);
-    });
-  }
-
-  // NEW: cancel shipyard queue
-  if (cancelShipyardQueueBtn) {
-    cancelShipyardQueueBtn.addEventListener('click', async () => {
-      if (!selectedShipyard) { showStatus('Select a shipyard first.'); return; }
-      showStatus(`Cancelling queue for Shipyard #${selectedShipyard.id}...`);
-      const r = await apiCancelShipyardQueue(selectedShipyard.id).catch(()=>null);
-      showStatus(r?.success ? `Queue cleared (${r.cleared} removed).` : `Cancel failed: ${r?.error || 'network error'}`);
       await refresh(false);
     });
   }
@@ -1343,7 +1296,7 @@ You chose to open as: ${openAs}
       if (unitsArr.length === 0) { showStatus('Nothing to queue.'); return; }
 
       showStatus(`Queuing for Shipyard #${selectedShipyard.id}...`);
-      const r = await apiQueueBuild(selectedShipyard.id, unitsArr).catch(()=>null);
+      const r = await apiQueueBuild(selectedShipyard.id, unitsArr).catch(() => null);
       if (r?.success) {
         showStatus(`Queued.`);
         clearBuildInputs();
@@ -1354,11 +1307,209 @@ You chose to open as: ${openAs}
 
   if (clearBuildBtn) clearBuildBtn.addEventListener('click', () => { clearBuildInputs(); showStatus(''); });
 
-  // (rest of your file continues unchanged from here)
-  // -------------------------------------------------
-  // NOTE: Everything below is exactly as you had it.
-  // -------------------------------------------------
+  if (unloadAllBtn) unloadAllBtn.addEventListener('click', async () => {
+    if (!selectedJumpShip) return;
+    showStatus('Unloading all cargo...');
+    const r = await apiUnload(selectedJumpShip.id, { all: true }).catch(() => null);
+    showStatus(r?.success ? 'Unloaded all.' : `Unload failed: ${r?.error || 'network error'}`);
+    selectedCargoIndex = null;
+    await refresh(false);
+  });
 
-  // ... keep the remainder of your existing public/game.js content ...
-  // (I did not re-paste the rest to keep this message readable.)
+  if (unloadSelectedBtn) unloadSelectedBtn.addEventListener('click', async () => {
+    if (!selectedJumpShip) return;
+    const cargoArr = Array.isArray(selectedJumpShip.cargo) ? selectedJumpShip.cargo : [];
+    if (selectedCargoIndex == null || selectedCargoIndex < 0 || selectedCargoIndex >= cargoArr.length) return;
+
+    const entry = cargoArr[selectedCargoIndex];
+    showStatus('Unloading selected cargo...');
+
+    let payload;
+    if (typeof entry === 'number') payload = { unitId: entry };
+    else payload = { resourceIndex: selectedCargoIndex };
+
+    const r = await apiUnload(selectedJumpShip.id, payload).catch(() => null);
+    showStatus(r?.success ? 'Unloaded.' : `Unload failed: ${r?.error || 'network error'}`);
+    selectedCargoIndex = null;
+    await refresh(false);
+  });
+
+  // NEW: load-many from a stack selection
+  if (loadSelectedUnitBtn) loadSelectedUnitBtn.addEventListener('click', async () => {
+    if (!selectedJumpShip || !selectedUnitItem || !selectedUnit) return;
+
+    const pool = Array.isArray(selectedUnitItem.units) ? selectedUnitItem.units : [selectedUnit];
+    if (pool.length === 0) return;
+
+    const want = Math.max(1, Math.floor(Number(loadCountInput?.value) || 1));
+    const n = Math.min(want, pool.length);
+
+    showStatus(`Loading ${n}x ${selectedUnit.type} into JumpShip #${selectedJumpShip.id}...`);
+
+    let loaded = 0;
+    for (let i = 0; i < n; i++) {
+      const unitToLoad = pool[i];
+      const r = await apiLoadUnit(unitToLoad.id, selectedJumpShip.id).catch(() => null);
+      if (!r?.success) {
+        showStatus(`Loaded ${loaded}/${n}. Stopped: ${r?.error || 'network error'}`);
+        await refresh(false);
+        return;
+      }
+      loaded++;
+    }
+
+    showStatus(`Loaded ${loaded} unit(s).`);
+    await refresh(false);
+  });
+
+  if (loadResourcesBtn) loadResourcesBtn.addEventListener('click', async () => {
+    if (!selectedJumpShip) { showStatus('Select a JumpShip first.'); return; }
+    const amt = Math.max(1, Math.floor(Number(resourceAmountInput?.value) || 1));
+    showStatus(`Loading ${amt} resources into JumpShip #${selectedJumpShip.id}...`);
+    const r = await apiLoadResources(selectedJumpShip.id, amt).catch(() => null);
+    showStatus(r?.success ? 'Loaded resources.' : `Load resources failed: ${r?.error || 'network error'}`);
+    await refresh(false);
+  });
+
+  if (convertShipBtn) convertShipBtn.addEventListener('click', async () => {
+    if (!selectedJumpShip) return;
+    showStatus('Converting JumpShip → Shipyard...');
+    const r = await apiConvertToShipyard(selectedJumpShip.id).catch(() => null);
+    showStatus(r?.success ? 'Conversion complete.' : `Conversion failed: ${r?.error || 'network error'}`);
+    await refresh(false);
+  });
+
+  if (researchTechSelect && researchTargetLevel) {
+    researchTechSelect.addEventListener('change', () => {
+      if (!selectedLab) return;
+      const t = researchTechSelect.value || 'Striker';
+      const cur = techLevel(selectedLab.faction, t);
+      researchTargetLevel.value = String(cur + 1);
+    });
+  }
+
+  if (queueResearchBtn) queueResearchBtn.addEventListener('click', async () => {
+    if (!selectedLab) { showStatus('Select a Lab first.'); return; }
+    const tech = researchTechSelect?.value || 'Striker';
+    const targetLevel = Math.max(1, Math.floor(Number(researchTargetLevel?.value) || 1));
+    showStatus(`Queuing research ${tech} -> L${targetLevel} at ${selectedLab.systemId}...`);
+    const r = await apiQueueResearch(selectedLab.id, tech, targetLevel).catch(() => null);
+    showStatus(r?.success ? 'Research queued.' : `Research failed: ${r?.error || 'network error'}`);
+    await refresh(false);
+  });
+
+  // --------------------
+  // Resize + refresh
+  // --------------------
+  function resize() {
+    canvas.width = canvas.clientWidth;
+    canvas.height = canvas.clientHeight;
+    draw();
+  }
+  window.addEventListener('resize', resize);
+
+  function setButtonArmed(btn, armed) {
+    if (!btn) return;
+    btn.classList.toggle('armed', !!armed);
+  }
+
+  function updateReadyStatus() {
+    if (!readyStatusEl) return;
+    const rd = game?.ready || { ithaxi: false, hive: false };
+    const a = rd.ithaxi ? 'READY' : 'not ready';
+    const b = rd.hive ? 'READY' : 'not ready';
+    readyStatusEl.textContent = `Ready: ithaxi=${a} | hive=${b}`;
+
+    // Arm button state for the local player
+    if (yourFaction) {
+      setButtonArmed(readyTurnBtn, !!rd[yourFaction]);
+      const ri = game?.resignIntent || { ithaxi: false, hive: false };
+      setButtonArmed(resignBtn, !!ri[yourFaction]);
+      if (confirmResignBtn) confirmResignBtn.style.display = ri[yourFaction] ? 'block' : 'none';
+    }
+  }
+
+  async function refresh(force) {
+    if (!requireSessionOrOverlay()) return;
+
+    const r = await apiGetState().catch(() => null);
+    if (!r?.success) {
+      showStatus(`Could not load state: ${r?.error || 'network error'}`);
+      openOverlay();
+      return;
+    }
+
+    game = r;
+    yourFaction = r.yourFaction;
+
+    if (turnEl) turnEl.textContent = `Turn: ${game.turn}`;
+    if (viewerEl) viewerEl.textContent = `You: ${yourFaction}`;
+    if (gameInfoEl) gameInfoEl.textContent = `Game: ${session.gameId}`;
+    updateReadyStatus();
+
+    if (readyTurnBtn) readyTurnBtn.disabled = !!game?.gameOver;
+    if (resignBtn) resignBtn.disabled = !!game?.gameOver;
+
+    // rebind selections by id
+    if (selectedShipyard) selectedShipyard = game.units.find(u => u.type === 'Shipyard' && u.id === selectedShipyard.id) || null;
+    if (selectedJumpShip) selectedJumpShip = game.units.find(u => u.type === 'JumpShip' && u.id === selectedJumpShip.id) || null;
+    if (selectedLab) selectedLab = game.units.find(u => u.type === 'Lab' && u.id === selectedLab.id) || null;
+    if (selectedUnit) selectedUnit = game.units.find(u => u.id === selectedUnit.id) || null;
+
+    // NEW: rebind stack selection after refresh
+    if (selectedUnit) {
+      const sysId = selectedUnit.systemId;
+      const type = selectedUnit.type;
+      const faction = selectedUnit.faction;
+      const unitsHere = game.units.filter(x => x.systemId === sysId && x.type === type && x.faction === faction);
+      selectedUnitItem = { unit: selectedUnit, units: unitsHere };
+    } else {
+      selectedUnitItem = null;
+    }
+
+    if (selectedJumpShip) {
+      const arr = Array.isArray(selectedJumpShip.cargo) ? selectedJumpShip.cargo : [];
+      if (selectedCargoIndex != null && (selectedCargoIndex < 0 || selectedCargoIndex >= arr.length)) selectedCargoIndex = null;
+    } else selectedCargoIndex = null;
+
+    updateBuildPanel();
+    updateCargoPanel();
+    updateResearchPanel();
+    renderTechLevels();
+    renderReport();
+    draw();
+
+    if (game?.gameOver) showStatus(`GAME OVER. Winner: ${game.winner ?? 'draw'}`);
+  }
+
+  // Poll status so you see when the other player readies and the turn resolves
+  let lastSeenTurn = null;
+  async function poll() {
+    if (!session.gameId || !session.code) return;
+    const st = await apiTurnStatus().catch(() => null);
+    if (!st?.success) return;
+
+    if (lastSeenTurn == null) lastSeenTurn = st.turn;
+
+    if (game && st.ready) game.ready = st.ready;
+    if (game && st.resignIntent) game.resignIntent = st.resignIntent;
+    updateReadyStatus();
+
+    if (st.turn !== lastSeenTurn) {
+      lastSeenTurn = st.turn;
+      await refresh(false);
+    }
+  }
+
+  function init() {
+    resize();
+
+    tryAutoJoinFromUrlOrStorage().then(async (joined) => {
+      if (joined) await refresh(true);
+    });
+
+    setInterval(() => { poll().catch(() => { }); }, 1500);
+  }
+
+  init();
 })();
