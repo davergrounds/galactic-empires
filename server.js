@@ -74,9 +74,38 @@ function jumpshipCapacity(faction, game) {
 }
 
 // =====================
+// Stats tracking
+// =====================
+function blankTypeCounter() {
+  return { JumpShip:0, Striker:0, Escort:0, Blocker:0, Mine:0, Shipyard:0, Lab:0 };
+}
+function ensureStats(game) {
+  if (!game.stats) {
+    game.stats = {
+      produced: { ithaxi: 0, hive: 0 },
+      built: { ithaxi: blankTypeCounter(), hive: blankTypeCounter() },
+      destroyedBy: { ithaxi: blankTypeCounter(), hive: blankTypeCounter() }
+    };
+  } else {
+    if (!game.stats.produced) game.stats.produced = { ithaxi: 0, hive: 0 };
+    if (!game.stats.built) game.stats.built = { ithaxi: blankTypeCounter(), hive: blankTypeCounter() };
+    if (!game.stats.destroyedBy) game.stats.destroyedBy = { ithaxi: blankTypeCounter(), hive: blankTypeCounter() };
+  }
+  for (const f of ['ithaxi','hive']) {
+    if (!game.stats.built[f]) game.stats.built[f] = blankTypeCounter();
+    if (!game.stats.destroyedBy[f]) game.stats.destroyedBy[f] = blankTypeCounter();
+    if (typeof game.stats.produced[f] !== 'number') game.stats.produced[f] = 0;
+    for (const t of Object.keys(blankTypeCounter())) {
+      if (typeof game.stats.built[f][t] !== 'number') game.stats.built[f][t] = 0;
+      if (typeof game.stats.destroyedBy[f][t] !== 'number') game.stats.destroyedBy[f][t] = 0;
+    }
+  }
+}
+
+// =====================
 // Game generator
 // =====================
-function createUnit(type, faction, systemId, nextIdRef, turnForMine = null) {
+function createUnit(type, faction, systemId, nextIdRef) {
   const u = {
     id: nextIdRef.value++,
     type,
@@ -87,11 +116,7 @@ function createUnit(type, faction, systemId, nextIdRef, turnForMine = null) {
   };
   if (type === 'JumpShip') u.cargo = [];
   if (type === 'Shipyard') u.buildQueue = [];
-  if (type === 'Mine') {
-    u.mineCooldown = 1;
-    // Used for "mines placed first" control rule
-    u.minePlacedTurn = (turnForMine != null) ? (turnForMine | 0) : null;
-  }
+  if (type === 'Mine') u.mineCooldown = 1;
   return u;
 }
 
@@ -99,8 +124,8 @@ function randomInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-function makeSysId(n) {
-  return `sys-${String(n).padStart(2, '0')}`;
+function makeSystemId(prefix, n) {
+  return `${prefix}-${String(n).padStart(2, '0')}`;
 }
 
 function generateNewGame(cfg) {
@@ -131,66 +156,47 @@ function generateNewGame(cfg) {
     return true;
   }
 
-  // Create ALL systems first: (neutralCount + 2) systems on random unique coordinates
-  const totalSystems = neutralCount + 2;
-  const systems = [];
-  let attempts = 0;
+  // NOTE: if you later implement hidden homeworlds, do it here.
+  const ithHome = { id: 'ITH-HOME', x: 1, y: 1, owner: 'ithaxi', value: 6, resources: homeSysRes };
+  const hiveHome = { id: 'HIVE-HOME', x: mapW - 2, y: mapH - 2, owner: 'hive', value: 6, resources: homeSysRes };
 
-  while (systems.length < totalSystems && attempts < totalSystems * 200) {
+  reserve(ithHome.x, ithHome.y);
+  reserve(hiveHome.x, hiveHome.y);
+
+  const systems = [ithHome, hiveHome];
+
+  let attempts = 0;
+  let placed = 0;
+  while (placed < neutralCount && attempts < neutralCount * 50) {
     attempts++;
     const x = randomInt(0, mapW - 1);
     const y = randomInt(0, mapH - 1);
     if (!reserve(x, y)) continue;
-
+    placed++;
     systems.push({
-      id: 'tmp',
+      id: makeSystemId('SYS', placed),
       x, y,
-      owner: null,        // legacy field, will be kept in sync with control
-      control: null,      // NEW: ithaxi|hive|contested|null (always visible)
+      owner: null,
       value: randomInt(1, 12),
-      resources: 0,
-      homeworldOf: null   // server-only truth for later extensions; not used by client
+      resources: 0
     });
   }
-
-  // assign sys-01..sys-N
-  systems.forEach((s, i) => { s.id = makeSysId(i + 1); });
-
-  // Choose two distinct systems as homeworlds (random, unknown to opponent)
-  const a = randomInt(0, systems.length - 1);
-  let b = randomInt(0, systems.length - 1);
-  while (b === a) b = randomInt(0, systems.length - 1);
-
-  const ithHomeSys = systems[a];
-  const hiveHomeSys = systems[b];
-
-  ithHomeSys.homeworldOf = 'ithaxi';
-  hiveHomeSys.homeworldOf = 'hive';
-
-  // Homeworld stats
-  ithHomeSys.value = 6;
-  hiveHomeSys.value = 6;
-  ithHomeSys.resources = homeSysRes;
-  hiveHomeSys.resources = homeSysRes;
 
   const nextIdRef = { value: 1 };
   const units = [];
 
-  // Turn starts at 1
-  const initialTurn = 1;
-
   for (const f of factions) {
-    const homeId = (f === 'ithaxi') ? ithHomeSys.id : hiveHomeSys.id;
+    const homeId = (f === 'ithaxi') ? 'ITH-HOME' : 'HIVE-HOME';
     for (const [type, count] of Object.entries(startUnits)) {
       for (let i = 0; i < count; i++) {
-        units.push(createUnit(type, f, homeId, nextIdRef, initialTurn));
+        units.push(createUnit(type, f, homeId, nextIdRef));
       }
     }
   }
 
   const techTemplate = { Striker: 0, Escort: 0, Blocker: 0, Mine: 0, Shipyard: 0, JumpShip: 0, Lab: 0 };
 
-  return {
+  const game = {
     turn: 1,
     nextUnitId: nextIdRef.value,
     lastTurnLog: [],
@@ -217,6 +223,9 @@ function generateNewGame(cfg) {
     systems,
     units
   };
+
+  ensureStats(game);
+  return game;
 }
 
 // =====================
@@ -225,7 +234,6 @@ function generateNewGame(cfg) {
 const games = new Map(); // gameId -> { game, joinCodes, createdAt }
 
 function randToken(len = 10) {
-  // simple base36 token
   let out = '';
   while (out.length < len) out += Math.random().toString(36).slice(2);
   return out.slice(0, len);
@@ -301,11 +309,8 @@ function cargoUsed(game, ship) {
   return used;
 }
 
-function markMineArrivedIfMine(unit, game) {
-  if (unit && unit.type === 'Mine') {
-    unit.mineCooldown = 1;
-    if (unit.minePlacedTurn == null && game) unit.minePlacedTurn = game.turn | 0;
-  }
+function markMineArrivedIfMine(unit) {
+  if (unit && unit.type === 'Mine') unit.mineCooldown = 1;
 }
 
 function keySysFaction(systemId, faction) { return `${systemId}|${faction}`; }
@@ -342,7 +347,7 @@ function autoUnloadHostileJumpShips(game, log) {
         if (cu) {
           cu.systemId = ship.systemId;
           cu.inTransit = null;
-          markMineArrivedIfMine(cu, game);
+          markMineArrivedIfMine(cu);
           unloadedUnits++;
         }
       } else if (isResourceCargo(entry)) keep.push(entry);
@@ -352,52 +357,6 @@ function autoUnloadHostileJumpShips(game, log) {
     if (unloadedUnits > 0) {
       log.push(`[AutoUnload ${ship.systemId}] JumpShip #${ship.id} in hostile system -> unloaded ${unloadedUnits} unit(s) (resources kept in cargo)`);
     }
-  }
-}
-
-// ---------------------
-// CONTROL / OWNERSHIP
-// ---------------------
-function earliestMineTurn(game, systemId, faction) {
-  let best = null;
-  for (const u of game.units) {
-    if (u.systemId !== systemId) continue;
-    if (u.faction !== faction) continue;
-    if (u.type !== 'Mine') continue;
-    const t = (u.minePlacedTurn == null) ? null : (u.minePlacedTurn | 0);
-    if (t == null) continue;
-    if (best == null || t < best) best = t;
-  }
-  return best;
-}
-
-function computeControlForSystem(game, systemId) {
-  const present = factionsPresentInSystem(game, systemId).filter(f => f === 'ithaxi' || f === 'hive');
-
-  if (present.length === 0) return null;
-  if (present.length === 1) return present[0];
-
-  // Both present: mines-first tiebreak
-  const ithMineTurn = earliestMineTurn(game, systemId, 'ithaxi');
-  const hiveMineTurn = earliestMineTurn(game, systemId, 'hive');
-
-  if (ithMineTurn != null && hiveMineTurn == null) return 'ithaxi';
-  if (hiveMineTurn != null && ithMineTurn == null) return 'hive';
-
-  if (ithMineTurn != null && hiveMineTurn != null) {
-    if (ithMineTurn < hiveMineTurn) return 'ithaxi';
-    if (hiveMineTurn < ithMineTurn) return 'hive';
-  }
-
-  return 'contested';
-}
-
-function updateControlAllSystems(game) {
-  for (const sys of game.systems) {
-    const ctrl = computeControlForSystem(game, sys.id);
-    sys.control = ctrl;
-    // Keep legacy sys.owner aligned for mining tech logic
-    sys.owner = (ctrl === 'ithaxi' || ctrl === 'hive') ? ctrl : null;
   }
 }
 
@@ -423,11 +382,13 @@ function computeBlockCapacity(game, systemId, faction) {
   };
 }
 
-function applyBlocksAndCasualties(game, systemId, faction, incomingHits) {
+function applyBlocksAndCasualties(game, systemId, defendingFaction, incomingHits, attackingFaction) {
+  ensureStats(game);
+
   // Escorts block first; blockers block second and are destroyed when used.
-  // Casualty priority (rules):
+  // Casualty priority:
   // STRIKERS > ESCORTS > JUMPSHIPS > MINES > LABS > SHIPYARDS
-  const blocks = computeBlockCapacity(game, systemId, faction);
+  const blocks = computeBlockCapacity(game, systemId, defendingFaction);
 
   let remaining = Math.max(0, incomingHits | 0);
 
@@ -441,14 +402,18 @@ function applyBlocksAndCasualties(game, systemId, faction, incomingHits) {
   if (cancelledByBlockers > 0) blockersDestroyed = Math.min(blocks.blockers.count, Math.ceil(cancelledByBlockers / 2));
 
   const destroyedIds = [];
+  const destroyedTypes = [];
 
   function destroySome(type, n) {
     if (n <= 0) return 0;
     const victims = game.units
-      .filter(u => u.systemId === systemId && u.faction === faction && u.type === type)
+      .filter(u => u.systemId === systemId && u.faction === defendingFaction && u.type === type)
       .sort((a, b) => a.id - b.id)
       .slice(0, n);
-    for (const v of victims) destroyedIds.push(v.id);
+    for (const v of victims) {
+      destroyedIds.push(v.id);
+      destroyedTypes.push(v.type);
+    }
     return victims.length;
   }
 
@@ -460,6 +425,14 @@ function applyBlocksAndCasualties(game, systemId, faction, incomingHits) {
     if (hitsToApply <= 0) break;
     const killed = destroySome(t, hitsToApply);
     hitsToApply -= killed;
+  }
+
+  // stats: count destroyed units by attacker
+  if (attackingFaction === 'ithaxi' || attackingFaction === 'hive') {
+    for (const t of destroyedTypes) {
+      if (game.stats.destroyedBy[attackingFaction][t] == null) game.stats.destroyedBy[attackingFaction][t] = 0;
+      game.stats.destroyedBy[attackingFaction][t] += 1;
+    }
   }
 
   if (destroyedIds.length > 0) game.units = game.units.filter(u => !destroyedIds.includes(u.id));
@@ -477,8 +450,10 @@ function resolveCombatInSystem(game, systemId, log) {
   const hitsA = computeOutgoingHits(game, systemId, a);
   const hitsB = computeOutgoingHits(game, systemId, b);
 
-  const resA = applyBlocksAndCasualties(game, systemId, a, hitsB);
-  const resB = applyBlocksAndCasualties(game, systemId, b, hitsA);
+  // a takes hits from b, so attacker = b
+  const resA = applyBlocksAndCasualties(game, systemId, a, hitsB, b);
+  // b takes hits from a, so attacker = a
+  const resB = applyBlocksAndCasualties(game, systemId, b, hitsA, a);
 
   const destroyedAll = [...resA.destroyedIds, ...resB.destroyedIds];
 
@@ -574,6 +549,7 @@ function checkGameOverAndSetWinner(game, log) {
 // =====================
 function resolveTurnInternal(game) {
   if (game.gameOver) return;
+  ensureStats(game);
 
   const log = [];
   game.lastTurnLog = log;
@@ -635,9 +611,14 @@ function resolveTurnInternal(game) {
 
       // create new unit
       const nextIdRef = { value: game.nextUnitId };
-      const nu = createUnit(type, sy.faction, sy.systemId, nextIdRef, game.turn);
+      const nu = createUnit(type, sy.faction, sy.systemId, nextIdRef);
       game.nextUnitId = nextIdRef.value;
       game.units.push(nu);
+
+      // stats: built
+      if (game.stats?.built?.[sy.faction] && game.stats.built[sy.faction][type] != null) {
+        game.stats.built[sy.faction][type] += 1;
+      }
 
       sy.buildQueue.shift();
       built++;
@@ -654,9 +635,6 @@ function resolveTurnInternal(game) {
     if (u.type === 'Mine' && typeof u.mineCooldown === 'number' && u.mineCooldown > 0) u.mineCooldown -= 1;
   }
 
-  // 6.5) Update control BEFORE mining (so sys.owner aligns with control for mining tech)
-  updateControlAllSystems(game);
-
   // 7) Mining + Exhaustion
   for (const sys of game.systems) {
     const minesOperatingRaw = game.units.filter(u =>
@@ -667,9 +645,14 @@ function resolveTurnInternal(game) {
 
     const minesOperating = Math.min(minesOperatingRaw, Math.max(0, sys.value));
 
-    // Mine tech currently tied to owner (as per your earlier "doesn't matter much")
+    // Mine tech currently tied to owner (existing rule)
     const produced = techValue((sys.owner || 'neutral'), 'Mine', minesOperating, game);
     if (produced > 0) sys.resources += produced;
+
+    // stats: produced resources attributed to system owner (if any)
+    if (produced > 0 && (sys.owner === 'ithaxi' || sys.owner === 'hive')) {
+      game.stats.produced[sys.owner] += produced;
+    }
 
     const roll = rollD20();
     const exhausted = produced > roll;
@@ -688,7 +671,7 @@ function resolveTurnInternal(game) {
   game.ready.ithaxi = false;
   game.ready.hive = false;
 
-  // resign intent resets each turn too (optional, but keeps it safe)
+  // resign intent resets each turn too
   game.resignIntent.ithaxi = false;
   game.resignIntent.hive = false;
 }
@@ -717,11 +700,10 @@ function parseSystemIdFromLogLine(line) {
 }
 
 function maskedStateForViewer(game, faction) {
+  ensureStats(game);
+
   const vis = computeVisibleSystemsForFaction(game, faction);
 
-  // Always show star positions + sys ids.
-  // Always show CONTROL colour.
-  // Hide owner/resources/value unless you have units there.
   const systems = game.systems.map(sys => {
     const isVisible = vis.has(sys.id);
 
@@ -729,13 +711,9 @@ function maskedStateForViewer(game, faction) {
     const resources = isVisible ? sys.resources : null;
     const value = isVisible ? sys.value : null;
 
-    // control is ALWAYS visible (for colouring)
-    const control = sys.control ?? null;
-
-    return { ...sys, owner, resources, value, control };
+    return { ...sys, owner, resources, value };
   });
 
-  // Units: show viewer units always; enemy units only in visible systems
   const units = game.units
     .filter(u => {
       if (u.faction === faction) return true;
@@ -745,7 +723,6 @@ function maskedStateForViewer(game, faction) {
     })
     .map(u => ({ ...u }));
 
-  // Turn log: only show system-scoped lines if visible
   const lastTurnLog = (game.lastTurnLog || []).filter(line => {
     const sysId = parseSystemIdFromLogLine(line);
     if (!sysId) return true;
@@ -763,7 +740,8 @@ function maskedStateForViewer(game, faction) {
     techLevels: game.techLevels,
     systems,
     units,
-    lastTurnLog
+    lastTurnLog,
+    stats: game.stats // <-- included so endgame screen can show totals
   };
 }
 
@@ -776,7 +754,6 @@ app.post('/games', (req, res) => {
   const cfg = req.body || {};
   const { gameId, joinCodeIthaxi, joinCodeHive } = createGameRecord(cfg);
 
-  // For convenience, build relative join links
   const ithLink = `/?game=${encodeURIComponent(gameId)}&code=${encodeURIComponent(joinCodeIthaxi)}`;
   const hiveLink = `/?game=${encodeURIComponent(gameId)}&code=${encodeURIComponent(joinCodeHive)}`;
 
@@ -796,9 +773,6 @@ app.get('/games/:gameId/state', (req, res) => {
   if (!auth) return;
 
   const { game, faction, gameId } = auth;
-
-  // keep control updated even when not resolving turns (UI stays accurate)
-  updateControlAllSystems(game);
 
   const state = maskedStateForViewer(game, faction);
   res.json({
@@ -1065,7 +1039,7 @@ app.post('/games/:gameId/order/unload', (req, res) => {
     for (const entry of ship.cargo) {
       if (typeof entry === 'number') {
         const cu = findUnit(game, entry);
-        if (cu) { cu.systemId = ship.systemId; cu.inTransit = null; markMineArrivedIfMine(cu, game); }
+        if (cu) { cu.systemId = ship.systemId; cu.inTransit = null; markMineArrivedIfMine(cu); }
       } else if (isResourceCargo(entry)) {
         sys.resources += cargoSizeForResourceAmount(entry.amount);
       }
@@ -1082,7 +1056,7 @@ app.post('/games/:gameId/order/unload', (req, res) => {
     ship.cargo = ship.cargo.filter(e => e !== u.id);
     u.systemId = ship.systemId;
     u.inTransit = null;
-    markMineArrivedIfMine(u, game);
+    markMineArrivedIfMine(u);
 
     return res.json({ success: true });
   }
@@ -1130,8 +1104,8 @@ app.post('/games/:gameId/order/produce', (req, res) => {
   res.json({ success: true, queued: shipyard.buildQueue.length });
 });
 
-// NEW: Cancel ALL items in a shipyard queue
-app.post('/games/:gameId/order/cancelShipyardQueue', (req, res) => {
+// NEW: Shipyard queue clear
+app.post('/games/:gameId/order/shipyardQueue/clear', (req, res) => {
   const auth = requireAuth(req, res);
   if (!auth) return;
 
@@ -1144,13 +1118,33 @@ app.post('/games/:gameId/order/cancelShipyardQueue', (req, res) => {
   if (!shipyard) return res.json({ success: false, error: 'Shipyard not found' });
 
   ensureBuildQueue(shipyard);
-  const cleared = shipyard.buildQueue.length;
   shipyard.buildQueue = [];
 
-  game.lastTurnLog = game.lastTurnLog || [];
-  game.lastTurnLog.push(`[Shipyard ${shipyard.id} @ ${shipyard.systemId}] QUEUE CLEARED (removed ${cleared})`);
+  res.json({ success: true });
+});
 
-  return res.json({ success: true, cleared });
+// NEW: Shipyard queue remove one item by index
+app.post('/games/:gameId/order/shipyardQueue/remove', (req, res) => {
+  const auth = requireAuth(req, res);
+  if (!auth) return;
+
+  const { game, faction } = auth;
+  const { shipyardId, index } = req.body || {};
+
+  if (game.gameOver) return res.json({ success: false, error: 'Game is over' });
+
+  const shipyard = game.units.find(u => u.id === shipyardId && u.faction === faction && u.type === 'Shipyard');
+  if (!shipyard) return res.json({ success: false, error: 'Shipyard not found' });
+
+  ensureBuildQueue(shipyard);
+
+  const idx = Math.floor(Number(index));
+  if (!Number.isFinite(idx) || idx < 0 || idx >= shipyard.buildQueue.length) {
+    return res.json({ success: false, error: 'Invalid index' });
+  }
+
+  shipyard.buildQueue.splice(idx, 1);
+  res.json({ success: true });
 });
 
 // Queue research
