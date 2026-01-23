@@ -90,7 +90,11 @@
   // Report
   const reportEl = document.getElementById('report');
 
-  if (!canvas || !ctx) return;
+  if (!canvas || !ctx) {
+  console.error('Canvas not ready');
+  return;
+}
+
 
   const COST = { JumpShip:10, Striker:2, Escort:1, Blocker:1, Mine:1, Lab:3, Shipyard:10 };
   const TECH_TYPES = ['Striker','Escort','Blocker','Mine','Shipyard','JumpShip','Lab'];
@@ -704,3 +708,4 @@ You chose to open as: ${openAs}
           row.className = 'listItem';
           row.style.display = 'flex';
           row.style.alignItems = 'center';
+
