@@ -1,19 +1,12 @@
-// public/game.js
+/* ===== Galactic Empires – game.js (repaired) ===== */
 (() => {
   'use strict';
 
-  /* ============================
-     BASIC DOM / SAFETY
-     ============================ */
-
-  const canvas = document.getElementById('map');
-  const ctx = canvas && canvas.getContext && canvas.getContext('2d');
-  if (!canvas || !ctx) {
-    console.error('Canvas not available');
-    return;
-  }
-
   const $ = id => document.getElementById(id);
+
+  const canvas = $('map');
+  const ctx = canvas && canvas.getContext && canvas.getContext('2d');
+  if (!canvas || !ctx) return;
 
   const tooltip = $('tooltip');
   const turnEl = $('turn');
@@ -31,53 +24,55 @@
   const zoomOutBtn = $('zoomOutBtn');
   const resetViewBtn = $('resetViewBtn');
 
-  /* ============================
-     CONSTANTS
-     ============================ */
+  const setupOverlay = $('setupOverlay');
+  const setupOpenAs = $('setupOpenAs');
+  const setupCreateBtn = $('setupCreateBtn');
+  const setupCloseBtn = $('setupCloseBtn');
+  const createdLinksEl = $('createdLinks');
 
-  const COST = {
-    JumpShip: 10,
-    Striker: 2,
-    Escort: 1,
-    Blocker: 1,
-    Mine: 1,
-    Lab: 3,
-    Shipyard: 10
-  };
+  const joinGameIdEl = $('joinGameId');
+  const joinCodeEl = $('joinCode');
+  const joinBtn = $('joinBtn');
 
+  const setupMapW = $('setupMapW');
+  const setupMapH = $('setupMapH');
+  const setupNeutralCount = $('setupNeutralCount');
+  const setupHomeSysRes = $('setupHomeSysRes');
+  const setupPlayerRes = $('setupPlayerRes');
+
+  const setupUJumpShip = $('setupUJumpShip');
+  const setupUShipyard = $('setupUShipyard');
+  const setupUMine = $('setupUMine');
+  const setupULab = $('setupULab');
+  const setupUStriker = $('setupUStriker');
+  const setupUEscort = $('setupUEscort');
+  const setupUBlocker = $('setupUBlocker');
+
+  const buildHint = $('buildHint');
+  const selectedShipyardEl = $('selectedShipyard');
+  const buildPanel = $('buildPanel');
+  const queueBuildBtn = $('queueBuildBtn');
+  const clearBuildBtn = $('clearBuildBtn');
+
+  const cargoHint = $('cargoHint');
+  const selectedJumpShipEl = $('selectedJumpShip');
+  const cargoPanel = $('cargoPanel');
+
+  const researchHint = $('researchHint');
+  const selectedLabEl = $('selectedLab');
+  const researchPanel = $('researchPanel');
+  const techLevelsEl = $('techLevels');
+
+  const reportEl = $('report');
+
+  const COST = { JumpShip:10, Striker:2, Escort:1, Blocker:1, Mine:1, Lab:3, Shipyard:10 };
   const TECH_TYPES = ['Striker','Escort','Blocker','Mine','Shipyard','JumpShip','Lab'];
 
   const FACTION_COLOR = {
-    ithaxi: '#ff8a2a',
-    hive: '#35d04a',
-    neutral: '#888'
+    ithaxi:'#ff8a2a',
+    hive:'#35d04a',
+    neutral:'#888'
   };
-
-  /* ============================
-     VIEW STATE
-     ============================ */
-
-  let view = { scale: 80, offsetX: 80, offsetY: 80 };
-  let dragging = false;
-  let dragStart = { x:0, y:0, ox:0, oy:0 };
-
-  function worldToScreen(x, y) {
-    return {
-      x: view.offsetX + x * view.scale,
-      y: view.offsetY + y * view.scale
-    };
-  }
-
-  function screenToWorld(x, y) {
-    return {
-      x: (x - view.offsetX) / view.scale,
-      y: (y - view.offsetY) / view.scale
-    };
-  }
-
-  /* ============================
-     SESSION
-     ============================ */
 
   const LS_KEY = 'GE_SESSION';
   let session = { gameId:null, code:null };
@@ -102,47 +97,38 @@
     const p = new URLSearchParams();
     p.set('game', gameId);
     p.set('code', code);
-    history.replaceState({}, '', '/?' + p.toString());
+    history.replaceState({}, '', `/?${p.toString()}`);
   }
 
   function clearUrl() {
     history.replaceState({}, '', '/');
   }
 
-  /* ============================
-     GAME STATE
-     ============================ */
+  function showStatus(msg) {
+    if (statusEl) statusEl.textContent = msg || '';
+  }
 
+  let view = { scale:80, offsetX:80, offsetY:80 };
   let game = null;
   let yourFaction = null;
 
-  function getSystem(id) {
-    return game?.systems?.find(s => s.id === id) || null;
+  function worldToScreen(x,y) {
+    return { x:view.offsetX + x*view.scale, y:view.offsetY + y*view.scale };
   }
 
-  function techLevel(faction, tech) {
-    return game?.techLevels?.[faction]?.[tech] || 0;
-  }
+  function draw() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    if (!game) return;
 
-  function jumpshipCap(faction) {
-    return Math.floor(8 * (1 + 0.2 * techLevel(faction, 'JumpShip')));
-  }
-
-  function shipyardCap(faction) {
-    return Math.floor(10 * (1 + 0.2 * techLevel(faction, 'Shipyard')));
-  }
-
-  /* ============================
-     API
-     ============================ */
-
-  async function api(path, body) {
-    const res = await fetch(path, {
-      method: 'POST',
-      headers: { 'Content-Type':'application/json' },
-      body: JSON.stringify({ ...body, gameId: session.gameId, code: session.code })
-    });
-    return res.json();
+    for (const s of game.systems || []) {
+      const p = worldToScreen(s.x, s.y);
+      ctx.beginPath();
+      ctx.arc(p.x,p.y,10,0,Math.PI*2);
+      ctx.fillStyle = FACTION_COLOR[s.owner || 'neutral'];
+      ctx.fill();
+      ctx.strokeStyle = '#000';
+      ctx.stroke();
+    }
   }
 
   async function apiGetState() {
@@ -152,129 +138,94 @@
     return res.json();
   }
 
-  /* ============================
-     DRAW MAP
-     ============================ */
-
-  function draw() {
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-    if (!game) return;
-
-    for (const sys of game.systems) {
-      const p = worldToScreen(sys.x, sys.y);
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, 10, 0, Math.PI * 2);
-      ctx.fillStyle = FACTION_COLOR[sys.owner || 'neutral'];
-      ctx.fill();
-      ctx.strokeStyle = '#000';
-      ctx.stroke();
-    }
-  }
-
-  /* ============================
-     REFRESH
-     ============================ */
-
-  async function refresh(initial=false) {
+  async function refresh() {
     if (!session.gameId || !session.code) return;
-
     const state = await apiGetState();
-    if (!state.success) {
-      statusEl.textContent = state.error || 'Error loading game';
+    if (!state?.success) {
+      showStatus(state?.error || 'Load failed');
       return;
     }
-
     game = state;
     yourFaction = state.yourFaction;
-
     turnEl.textContent = `Turn: ${state.turn}`;
     viewerEl.textContent = `You: ${yourFaction}`;
     gameInfoEl.textContent = `Game: ${session.gameId}`;
-    readyStatusEl.textContent =
-      `Ready: ithaxi=${state.ready.ithaxi} hive=${state.ready.hive}`;
-
-    if (state.gameOver) showEndgameOverlay();
+    readyStatusEl.textContent = `Ready: ithaxi=${state.ready.ithaxi} hive=${state.ready.hive}`;
     draw();
   }
 
-  /* ============================
-     ENDGAME OVERLAY
-     ============================ */
+  function openOverlay() {
+    if (setupOverlay) setupOverlay.style.display = 'flex';
+  }
 
-  let endOverlay = null;
+  function closeOverlay() {
+    if (setupOverlay) setupOverlay.style.display = 'none';
+  }
 
-  function showEndgameOverlay() {
-    if (endOverlay) return;
+  if (setupCreateBtn) {
+    setupCreateBtn.onclick = async () => {
+      const openAs = setupOpenAs.value;
+      const cfg = {
+        mapW:+setupMapW.value,
+        mapH:+setupMapH.value,
+        neutralCount:+setupNeutralCount.value,
+        homeSysRes:+setupHomeSysRes.value,
+        playerRes:+setupPlayerRes.value,
+        uJumpShip:+setupUJumpShip.value,
+        uShipyard:+setupUShipyard.value,
+        uMine:+setupUMine.value,
+        uLab:+setupULab.value,
+        uStriker:+setupUStriker.value,
+        uEscort:+setupUEscort.value,
+        uBlocker:+setupUBlocker.value
+      };
 
-    endOverlay = document.createElement('div');
-    endOverlay.style.position = 'fixed';
-    endOverlay.style.inset = '0';
-    endOverlay.style.background = 'rgba(0,0,0,0.9)';
-    endOverlay.style.zIndex = '9999';
-    endOverlay.style.display = 'flex';
-    endOverlay.style.alignItems = 'center';
-    endOverlay.style.justifyContent = 'center';
+      showStatus('Creating game...');
+      const res = await fetch('/games',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(cfg)
+      }).then(r=>r.json());
 
-    const card = document.createElement('div');
-    card.style.background = '#111';
-    card.style.padding = '20px';
-    card.style.border = '1px solid #333';
-    card.style.borderRadius = '12px';
-    card.style.width = '720px';
-    card.style.maxHeight = '85vh';
-    card.style.overflow = 'auto';
+      if (!res.success) {
+        showStatus(res.error || 'Create failed');
+        return;
+      }
 
-    const winner =
-      game.winner ? `Winner: ${game.winner}` : 'Draw';
+      const code = openAs === 'hive' ? res.join.hive.code : res.join.ithaxi.code;
+      session.gameId = res.gameId;
+      session.code = code;
+      saveSession();
+      setUrl(session.gameId, session.code);
+      closeOverlay();
+      refresh();
+    };
+  }
 
-    card.innerHTML = `
-      <h2>Game Over</h2>
-      <div>${winner}</div>
-      <pre style="margin-top:10px;font-size:12px">
-Resources produced:
-  Ithaxi: ${game.stats.produced.ithaxi}
-  Hive:   ${game.stats.produced.hive}
-      </pre>
-    `;
+  if (joinBtn) {
+    joinBtn.onclick = async () => {
+      session.gameId = joinGameIdEl.value.trim();
+      session.code = joinCodeEl.value.trim();
+      saveSession();
+      setUrl(session.gameId, session.code);
+      closeOverlay();
+      refresh();
+    };
+  }
 
-    const close = document.createElement('button');
-    close.textContent = 'Back to Setup';
-    close.onclick = () => {
-      endOverlay.remove();
-      endOverlay = null;
+  if (openSetupBtn) {
+    openSetupBtn.onclick = () => {
       clearSession();
       clearUrl();
       game = null;
-      openSetup();
+      openOverlay();
       draw();
     };
-
-    card.appendChild(close);
-    endOverlay.appendChild(card);
-    document.body.appendChild(endOverlay);
   }
-
-  /* ============================
-     SETUP OVERLAY
-     ============================ */
-
-  const setupOverlay = $('setupOverlay');
-
-  function openSetup() {
-    setupOverlay.style.display = 'flex';
-  }
-
-  function closeSetup() {
-    setupOverlay.style.display = 'none';
-  }
-
-  /* ============================
-     INIT
-     ============================ */
 
   loadSession();
 
-  (async () => {
+  (() => {
     const p = new URLSearchParams(location.search);
     const g = p.get('game');
     const c = p.get('code');
@@ -282,14 +233,14 @@ Resources produced:
       session.gameId = g;
       session.code = c;
       saveSession();
-      closeSetup();
-      await refresh(true);
+      closeOverlay();
+      refresh();
     } else if (session.gameId && session.code) {
       setUrl(session.gameId, session.code);
-      closeSetup();
-      await refresh(true);
+      closeOverlay();
+      refresh();
     } else {
-      openSetup();
+      openOverlay();
     }
   })();
 
