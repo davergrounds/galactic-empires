@@ -1,95 +1,111 @@
 // public/game.js
 (() => {
-  const canvas = document.getElementById('map');
+  'use strict';
+
+  /* =========================================================
+     DOM
+     ========================================================= */
+  const $ = (id) => document.getElementById(id);
+
+  const canvas = $('map');
   const ctx = canvas?.getContext?.('2d');
 
-  const tooltip = document.getElementById('tooltip');
-  const turnEl = document.getElementById('turn');
-  const viewerEl = document.getElementById('viewer');
-  const readyStatusEl = document.getElementById('readyStatus');
-  const gameInfoEl = document.getElementById('gameInfo');
-  const statusEl = document.getElementById('status');
+  const tooltip = $('tooltip');
+  const turnEl = $('turn');
+  const viewerEl = $('viewer');
+  const readyStatusEl = $('readyStatus');
+  const gameInfoEl = $('gameInfo');
+  const statusEl = $('status');
 
-  const readyTurnBtn = document.getElementById('readyTurnBtn');
-  const resignBtn = document.getElementById('resignBtn');
-  const zoomInBtn = document.getElementById('zoomInBtn');
-  const zoomOutBtn = document.getElementById('zoomOutBtn');
-  const resetViewBtn = document.getElementById('resetViewBtn');
+  const readyTurnBtn = $('readyTurnBtn');
+  const resignBtn = $('resignBtn');
+  const confirmResignBtn = $('confirmResignBtn');
 
-  const confirmResignBtn = document.getElementById('confirmResignBtn');
-  const openSetupBtn = document.getElementById('openSetupBtn');
+  const zoomInBtn = $('zoomInBtn');
+  const zoomOutBtn = $('zoomOutBtn');
+  const resetViewBtn = $('resetViewBtn');
+
+  const openSetupBtn = $('openSetupBtn');
 
   // Setup overlay
-  const setupOverlay = document.getElementById('setupOverlay');
-  const setupOpenAs = document.getElementById('setupOpenAs');
-  const setupCreateBtn = document.getElementById('setupCreateBtn');
-  const setupCloseBtn = document.getElementById('setupCloseBtn');
-  const createdLinksEl = document.getElementById('createdLinks');
+  const setupOverlay = $('setupOverlay');
+  const setupOpenAs = $('setupOpenAs');
+  const setupCreateBtn = $('setupCreateBtn');
+  const setupCloseBtn = $('setupCloseBtn');
+  const createdLinksEl = $('createdLinks');
 
-  const joinGameIdEl = document.getElementById('joinGameId');
-  const joinCodeEl = document.getElementById('joinCode');
-  const joinBtn = document.getElementById('joinBtn');
+  const joinGameIdEl = $('joinGameId');
+  const joinCodeEl = $('joinCode');
+  const joinBtn = $('joinBtn');
 
-  const setupMapW = document.getElementById('setupMapW');
-  const setupMapH = document.getElementById('setupMapH');
-  const setupNeutralCount = document.getElementById('setupNeutralCount');
-  const setupHomeSysRes = document.getElementById('setupHomeSysRes');
-  const setupPlayerRes = document.getElementById('setupPlayerRes');
+  const setupMapW = $('setupMapW');
+  const setupMapH = $('setupMapH');
+  const setupNeutralCount = $('setupNeutralCount');
+  const setupHomeSysRes = $('setupHomeSysRes');
+  const setupPlayerRes = $('setupPlayerRes');
 
-  const setupUJumpShip = document.getElementById('setupUJumpShip');
-  const setupUShipyard = document.getElementById('setupUShipyard');
-  const setupUMine = document.getElementById('setupUMine');
-  const setupULab = document.getElementById('setupULab');
-  const setupUStriker = document.getElementById('setupUStriker');
-  const setupUEscort = document.getElementById('setupUEscort');
-  const setupUBlocker = document.getElementById('setupUBlocker');
+  const setupUJumpShip = $('setupUJumpShip');
+  const setupUShipyard = $('setupUShipyard');
+  const setupUMine = $('setupUMine');
+  const setupULab = $('setupULab');
+  const setupUStriker = $('setupUStriker');
+  const setupUEscort = $('setupUEscort');
+  const setupUBlocker = $('setupUBlocker');
 
   // Build UI
-  const buildHint = document.getElementById('buildHint');
-  const selectedShipyardEl = document.getElementById('selectedShipyard');
-  const buildPanel = document.getElementById('buildPanel');
-  const queueBuildBtn = document.getElementById('queueBuildBtn');
-  const clearBuildBtn = document.getElementById('clearBuildBtn');
+  const buildHint = $('buildHint');
+  const selectedShipyardEl = $('selectedShipyard');
+  const buildPanel = $('buildPanel');
+  const queueBuildBtn = $('queueBuildBtn');
+  const clearBuildBtn = $('clearBuildBtn');
   const buildInputs = {
-    Striker: document.getElementById('bStriker'),
-    Escort: document.getElementById('bEscort'),
-    Blocker: document.getElementById('bBlocker'),
-    Mine: document.getElementById('bMine'),
-    Lab: document.getElementById('bLab'),
-    JumpShip: document.getElementById('bJumpShip'),
+    Striker: $('bStriker'),
+    Escort: $('bEscort'),
+    Blocker: $('bBlocker'),
+    Mine: $('bMine'),
+    Lab: $('bLab'),
+    JumpShip: $('bJumpShip'),
+    // Optional if your HTML has it:
+    Shipyard: $('bShipyard'),
   };
 
   // Cargo UI
-  const cargoHint = document.getElementById('cargoHint');
-  const selectedJumpShipEl = document.getElementById('selectedJumpShip');
-  const cargoPanel = document.getElementById('cargoPanel');
-  const cargoSummaryEl = document.getElementById('cargoSummary');
-  const cargoListEl = document.getElementById('cargoList');
-  const unloadSelectedBtn = document.getElementById('unloadSelectedBtn');
-  const unloadAllBtn = document.getElementById('unloadAllBtn');
-  const loadSelectedUnitBtn = document.getElementById('loadSelectedUnitBtn');
-  const selectedUnitLine = document.getElementById('selectedUnitLine');
-  const resourceAmountInput = document.getElementById('resourceAmount');
-  const loadResourcesBtn = document.getElementById('loadResourcesBtn');
-  const convertShipBtn = document.getElementById('convertShipBtn');
+  const cargoHint = $('cargoHint');
+  const selectedJumpShipEl = $('selectedJumpShip');
+  const cargoPanel = $('cargoPanel');
+  const cargoSummaryEl = $('cargoSummary');
+  const cargoListEl = $('cargoList');
+  const unloadSelectedBtn = $('unloadSelectedBtn');
+  const unloadAllBtn = $('unloadAllBtn');
+  const loadSelectedUnitBtn = $('loadSelectedUnitBtn');
+  const selectedUnitLine = $('selectedUnitLine');
+  const resourceAmountInput = $('resourceAmount');
+  const loadResourcesBtn = $('loadResourcesBtn');
+  const convertShipBtn = $('convertShipBtn');
 
-  // NEW: load-many control (add <input id="loadCount" type="number" min="1" value="1"> in your HTML)
-  const loadCountInput = document.getElementById('loadCount');
+  // Optional load-many control: <input id="loadCount" type="number" min="1" value="1">
+  const loadCountInput = $('loadCount');
 
   // Research UI
-  const researchHint = document.getElementById('researchHint');
-  const selectedLabEl = document.getElementById('selectedLab');
-  const researchPanel = document.getElementById('researchPanel');
-  const techLevelsEl = document.getElementById('techLevels');
-  const researchTechSelect = document.getElementById('researchTech');
-  const researchTargetLevel = document.getElementById('researchTargetLevel');
-  const queueResearchBtn = document.getElementById('queueResearchBtn');
+  const researchHint = $('researchHint');
+  const selectedLabEl = $('selectedLab');
+  const researchPanel = $('researchPanel');
+  const techLevelsEl = $('techLevels');
+  const researchTechSelect = $('researchTech');
+  const researchTargetLevel = $('researchTargetLevel');
+  const queueResearchBtn = $('queueResearchBtn');
 
   // Report
-  const reportEl = document.getElementById('report');
+  const reportEl = $('report');
 
-  if (!canvas || !ctx) return;
+  if (!canvas || !ctx) {
+    console.error('Canvas missing (#map).');
+    return;
+  }
 
+  /* =========================================================
+     CONSTANTS
+     ========================================================= */
   const COST = { JumpShip: 10, Striker: 2, Escort: 1, Blocker: 1, Mine: 1, Lab: 3, Shipyard: 10 };
   const TECH_TYPES = ['Striker', 'Escort', 'Blocker', 'Mine', 'Shipyard', 'JumpShip', 'Lab'];
 
@@ -99,6 +115,9 @@
     neutral: '#888'
   };
 
+  /* =========================================================
+     SESSION (URL + localStorage)
+     ========================================================= */
   const LS_KEY = 'GE_SESSION'; // stores {gameId, code}
   let session = { gameId: null, code: null };
 
@@ -108,7 +127,7 @@
       if (!raw) return;
       const obj = JSON.parse(raw);
       if (obj && typeof obj === 'object') session = { gameId: obj.gameId || null, code: obj.code || null };
-    } catch { }
+    } catch { /* ignore */ }
   }
   function saveSessionToStorage() {
     localStorage.setItem(LS_KEY, JSON.stringify({ gameId: session.gameId, code: session.code }));
@@ -134,8 +153,13 @@
     window.history.replaceState({}, '', `/`);
   }
 
-  function showStatus(msg) { if (statusEl) statusEl.textContent = msg || ''; }
+  function showStatus(msg) {
+    if (statusEl) statusEl.textContent = msg || '';
+  }
 
+  /* =========================================================
+     VIEW / STATE
+     ========================================================= */
   let view = { scale: 80, offsetX: 80, offsetY: 80 };
   let draggingPan = false;
   let panStart = { x: 0, y: 0, ox: 0, oy: 0 };
@@ -147,9 +171,8 @@
   let selectedJumpShip = null;
   let selectedLab = null;
   let selectedUnit = null;
-  let selectedUnitGroup = null; // { ids:[], type, faction, systemId }
 
-  // NEW: store the draw item (includes stack list item.units[])
+  // Stack selection info (hit item includes item.units[])
   let selectedUnitItem = null;
 
   let draggingJumpShip = null;
@@ -173,10 +196,15 @@
   }
 
   function getSystem(id) { return game?.systems?.find(s => s.id === id) || null; }
-
   function techLevel(faction, tech) {
     const lvl = game?.techLevels?.[faction]?.[tech];
     return Number.isFinite(lvl) ? lvl : 0;
+  }
+
+  function canSeeSystemStats(sysId) {
+    // Improvement: You should not see resources/value of a system unless you have units there.
+    if (!game || !yourFaction) return false;
+    return game.units?.some(u => u.systemId === sysId && u.faction === yourFaction) || false;
   }
 
   function escapeHtml(s) {
@@ -186,9 +214,172 @@
       .replace(/>/g, '&gt;');
   }
 
-  // --------------------
-  // API
-  // --------------------
+  /* =========================================================
+     ENDGAME OVERLAY (dynamic)
+     ========================================================= */
+  let endOverlay = null;
+  let endOverlayInner = null;
+
+  function ensureEndOverlay() {
+    if (endOverlay) return;
+
+    endOverlay = document.createElement('div');
+    endOverlay.style.position = 'fixed';
+    endOverlay.style.inset = '0';
+    endOverlay.style.background = 'rgba(0,0,0,0.85)';
+    endOverlay.style.display = 'none';
+    endOverlay.style.zIndex = '9999';
+    endOverlay.style.alignItems = 'center';
+    endOverlay.style.justifyContent = 'center';
+
+    const card = document.createElement('div');
+    card.style.width = 'min(760px, 92vw)';
+    card.style.maxHeight = '86vh';
+    card.style.overflow = 'auto';
+    card.style.background = '#111';
+    card.style.border = '1px solid #333';
+    card.style.borderRadius = '12px';
+    card.style.padding = '16px 16px 12px 16px';
+    card.style.boxShadow = '0 10px 30px rgba(0,0,0,0.5)';
+
+    const title = document.createElement('div');
+    title.style.fontSize = '20px';
+    title.style.fontWeight = '700';
+    title.style.marginBottom = '10px';
+    title.textContent = 'Game Over';
+
+    endOverlayInner = document.createElement('div');
+    endOverlayInner.style.fontSize = '14px';
+    endOverlayInner.style.lineHeight = '1.4';
+
+    const btnRow = document.createElement('div');
+    btnRow.style.display = 'flex';
+    btnRow.style.gap = '10px';
+    btnRow.style.marginTop = '12px';
+
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = 'Close';
+    closeBtn.onclick = () => { endOverlay.style.display = 'none'; };
+
+    const newGameBtn = document.createElement('button');
+    newGameBtn.textContent = 'Back to Setup';
+    newGameBtn.onclick = () => {
+      endOverlay.style.display = 'none';
+      clearSelections();
+      clearSession();
+      clearUrl();
+      game = null;
+      yourFaction = null;
+      if (turnEl) turnEl.textContent = 'Turn: ?';
+      if (viewerEl) viewerEl.textContent = 'You: ?';
+      if (gameInfoEl) gameInfoEl.textContent = 'Game: ?';
+      if (readyStatusEl) readyStatusEl.textContent = 'Ready: ?';
+      showStatus('');
+      if (setupOverlay) setupOverlay.style.display = 'flex';
+      draw();
+    };
+
+    btnRow.appendChild(closeBtn);
+    btnRow.appendChild(newGameBtn);
+
+    card.appendChild(title);
+    card.appendChild(endOverlayInner);
+    card.appendChild(btnRow);
+
+    endOverlay.appendChild(card);
+    document.body.appendChild(endOverlay);
+  }
+
+  function fmtTypeTable(title, obj) {
+    const order = ['JumpShip', 'Shipyard', 'Striker', 'Escort', 'Blocker', 'Mine', 'Lab'];
+    const rows = order.map(t => `<tr><td>${escapeHtml(t)}</td><td style="text-align:right">${escapeHtml(obj?.[t] ?? 0)}</td></tr>`).join('');
+    return `
+      <div style="margin-top:10px">
+        <div style="font-weight:700; margin:6px 0">${escapeHtml(title)}</div>
+        <table style="width:100%; border-collapse:collapse"><tbody>${rows}</tbody></table>
+      </div>
+    `;
+  }
+
+  function showEndgameOverlay() {
+    ensureEndOverlay();
+    if (!game?.gameOver) return;
+
+    const winner = game.winner ? String(game.winner) : 'draw';
+    const stats = game.stats || {};
+    const prod = stats.produced || {};
+    const built = stats.built || {};
+    const destroyedBy = stats.destroyedBy || {};
+
+    const winnerLine = (winner === 'draw')
+      ? `<div><b>Result:</b> Draw</div>`
+      : `<div><b>Winner:</b> ${escapeHtml(winner)}</div>`;
+
+    const producedLine = `
+      <div style="margin-top:8px">
+        <b>Total resources produced (mining):</b><br>
+        ithaxi: ${escapeHtml(prod.ithaxi ?? 0)}<br>
+        hive: ${escapeHtml(prod.hive ?? 0)}
+      </div>
+    `;
+
+    endOverlayInner.innerHTML =
+      `${winnerLine}
+       ${producedLine}
+       ${fmtTypeTable('Units built by Ithaxi', built.ithaxi)}
+       ${fmtTypeTable('Units built by Hive', built.hive)}
+       ${fmtTypeTable('Units destroyed by Ithaxi', destroyedBy.ithaxi)}
+       ${fmtTypeTable('Units destroyed by Hive', destroyedBy.hive)}
+       <div style="margin-top:10px; color:#aaa; font-size:12px">
+         Notes: “resources produced” is tracked from mining output credited to the system owner (per current rules).
+       </div>`;
+
+    endOverlay.style.display = 'flex';
+  }
+
+  /* =========================================================
+     SHIPYARD QUEUE UI (optional, uses server endpoints if present)
+     ========================================================= */
+  let shipyardQueueWrap = null;
+  let shipyardQueueList = null;
+  let shipyardQueueClearBtn = null;
+
+  function ensureShipyardQueueUI() {
+    if (!buildPanel) return;
+    if (shipyardQueueWrap) return;
+
+    shipyardQueueWrap = document.createElement('div');
+    shipyardQueueWrap.style.marginTop = '10px';
+    shipyardQueueWrap.style.borderTop = '1px solid #333';
+    shipyardQueueWrap.style.paddingTop = '10px';
+
+    const head = document.createElement('div');
+    head.style.display = 'flex';
+    head.style.alignItems = 'center';
+    head.style.justifyContent = 'space-between';
+
+    const title = document.createElement('div');
+    title.style.fontWeight = '700';
+    title.textContent = 'Build Queue';
+
+    shipyardQueueClearBtn = document.createElement('button');
+    shipyardQueueClearBtn.textContent = 'Clear queue';
+    shipyardQueueClearBtn.disabled = true;
+
+    head.appendChild(title);
+    head.appendChild(shipyardQueueClearBtn);
+
+    shipyardQueueList = document.createElement('div');
+    shipyardQueueList.style.marginTop = '8px';
+
+    shipyardQueueWrap.appendChild(head);
+    shipyardQueueWrap.appendChild(shipyardQueueList);
+    buildPanel.appendChild(shipyardQueueWrap);
+  }
+
+  /* =========================================================
+     API
+     ========================================================= */
   async function apiCreateGame(cfg) {
     const res = await fetch('/games', {
       method: 'POST',
@@ -270,6 +461,27 @@
     return await res.json();
   }
 
+  // Optional queue management endpoints
+  async function apiShipyardQueueClear(shipyardId) {
+    const { gameId, code } = session;
+    const res = await fetch(`/games/${encodeURIComponent(gameId)}/order/shipyardQueue/clear`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ gameId, code, shipyardId })
+    });
+    return await res.json();
+  }
+
+  async function apiShipyardQueueRemove(shipyardId, index) {
+    const { gameId, code } = session;
+    const res = await fetch(`/games/${encodeURIComponent(gameId)}/order/shipyardQueue/remove`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ gameId, code, shipyardId, index })
+    });
+    return await res.json();
+  }
+
   async function apiLoadUnit(unitId, jumpShipId) {
     const { gameId, code } = session;
     const res = await fetch(`/games/${encodeURIComponent(gameId)}/order/load`, {
@@ -320,9 +532,9 @@
     return await res.json();
   }
 
-  // --------------------
-  // Setup logic
-  // --------------------
+  /* =========================================================
+     SETUP LOGIC
+     ========================================================= */
   function openOverlay() {
     if (setupOverlay) setupOverlay.style.display = 'flex';
   }
@@ -398,25 +610,31 @@ You chose to open as: ${openAs}
       };
 
       showStatus('Creating game...');
-      const r = await apiCreateGame(cfg);
+      if (setupCreateBtn) setupCreateBtn.disabled = true;
 
-      if (!r?.success) {
-        showStatus(`Create failed: ${r?.error || 'unknown error'}`);
-        return;
+      try {
+        const r = await apiCreateGame(cfg);
+
+        if (!r?.success) {
+          showStatus(`Create failed: ${r?.error || 'unknown error'}`);
+          return;
+        }
+
+        renderCreatedLinks(r, openAs);
+
+        // Auto-open as chosen side
+        const chosenCode = (openAs === 'hive') ? r.join.hive.code : r.join.ithaxi.code;
+        session.gameId = r.gameId;
+        session.code = chosenCode;
+        saveSessionToStorage();
+        setUrl(session.gameId, session.code);
+
+        showStatus('Game created. Copy the links/codes above. Close this panel when ready.');
+        // Do NOT auto-close — keep the codes visible until the user closes the overlay.
+        await refresh(true);
+      } finally {
+        if (setupCreateBtn) setupCreateBtn.disabled = false;
       }
-
-      renderCreatedLinks(r, openAs);
-
-      // Auto-open as chosen side
-      const chosenCode = (openAs === 'hive') ? r.join.hive.code : r.join.ithaxi.code;
-      session.gameId = r.gameId;
-      session.code = chosenCode;
-      saveSessionToStorage();
-      setUrl(session.gameId, session.code);
-
-      showStatus('Game created. Copy the links/codes above. Close this panel when ready.');
-      // Do NOT auto-close — keep the codes visible until the user closes the overlay.
-      await refresh(true);
     });
   }
 
@@ -457,15 +675,19 @@ You chose to open as: ${openAs}
     });
   }
 
-  // --------------------
-  // Panels
-  // --------------------
+  /* =========================================================
+     PANELS
+     ========================================================= */
   function updateBuildPanel() {
     if (!buildHint || !selectedShipyardEl) return;
+
+    ensureShipyardQueueUI();
 
     if (!selectedShipyard) {
       buildHint.textContent = 'Click a Shipyard to build units.';
       selectedShipyardEl.textContent = '';
+      if (shipyardQueueList) shipyardQueueList.innerHTML = '';
+      if (shipyardQueueClearBtn) shipyardQueueClearBtn.disabled = true;
       setBuildEnabled(false);
       return;
     }
@@ -474,7 +696,9 @@ You chose to open as: ${openAs}
     const qEntries = Array.isArray(queue) ? queue.length : 0;
 
     const sys = selectedShipyard.systemId ? getSystem(selectedShipyard.systemId) : null;
-    const sysRes = (sys && sys.resources != null) ? sys.resources : '?';
+
+    // Show sys resources only if you have units there (fog-of-war rule)
+    const sysRes = (sys && canSeeSystemStats(sys.id) && sys.resources != null) ? sys.resources : '??';
 
     const lvl = techLevel(selectedShipyard.faction, 'Shipyard');
     const cap = Math.floor(10 * (1 + 0.2 * lvl));
@@ -483,6 +707,78 @@ You chose to open as: ${openAs}
     selectedShipyardEl.textContent =
       `Selected Shipyard: #${selectedShipyard.id} (${selectedShipyard.faction}) @ ${selectedShipyard.systemId} | ` +
       `System R:${sysRes} | Spend cap: ${cap} | Queue entries: ${qEntries}`;
+
+    // Render queue list if present
+    if (shipyardQueueList) {
+      shipyardQueueList.innerHTML = '';
+      const arr = Array.isArray(selectedShipyard.buildQueue) ? selectedShipyard.buildQueue : [];
+      if (arr.length === 0) {
+        const d = document.createElement('div');
+        d.className = 'muted';
+        d.textContent = '(empty)';
+        shipyardQueueList.appendChild(d);
+      } else {
+        arr.forEach((job, idx) => {
+          const row = document.createElement('div');
+          row.className = 'listItem';
+          row.style.display = 'flex';
+          row.style.alignItems = 'center';
+          row.style.justifyContent = 'space-between';
+          row.style.gap = '10px';
+
+          const left = document.createElement('div');
+          const type = job?.type ?? '?';
+          const count = job?.count ?? '?';
+          left.textContent = `${type} x${count}`;
+
+          const right = document.createElement('div');
+          right.style.display = 'flex';
+          right.style.gap = '8px';
+          right.style.alignItems = 'center';
+
+          const idxEl = document.createElement('span');
+          idxEl.className = 'muted';
+          idxEl.textContent = `#${idx}`;
+
+          const rm = document.createElement('button');
+          rm.textContent = 'Remove';
+          rm.onclick = async () => {
+            if (!selectedShipyard) return;
+            showStatus(`Removing queue entry #${idx}...`);
+            const r = await apiShipyardQueueRemove(selectedShipyard.id, idx).catch(() => null);
+            if (!r?.success) {
+              showStatus(`Remove failed (server may not support this endpoint): ${r?.error || 'network error'}`);
+              return;
+            }
+            showStatus('Removed.');
+            await refresh(false);
+          };
+
+          right.appendChild(idxEl);
+          right.appendChild(rm);
+
+          row.appendChild(left);
+          row.appendChild(right);
+
+          shipyardQueueList.appendChild(row);
+        });
+      }
+    }
+
+    if (shipyardQueueClearBtn) {
+      shipyardQueueClearBtn.disabled = !(Array.isArray(selectedShipyard.buildQueue) && selectedShipyard.buildQueue.length > 0);
+      shipyardQueueClearBtn.onclick = async () => {
+        if (!selectedShipyard) return;
+        showStatus('Clearing shipyard queue...');
+        const r = await apiShipyardQueueClear(selectedShipyard.id).catch(() => null);
+        if (!r?.success) {
+          showStatus(`Clear failed (server may not support this endpoint): ${r?.error || 'network error'}`);
+          return;
+        }
+        showStatus('Queue cleared.');
+        await refresh(false);
+      };
+    }
 
     setBuildEnabled(true);
   }
@@ -537,7 +833,7 @@ You chose to open as: ${openAs}
 
     const used = cargoUsedLocal(selectedJumpShip);
     const sys = selectedJumpShip.systemId ? getSystem(selectedJumpShip.systemId) : null;
-    const sysRes = (sys && sys.resources != null) ? sys.resources : '?';
+    const sysRes = (sys && canSeeSystemStats(sys.id) && sys.resources != null) ? sys.resources : '??';
 
     const lvl = techLevel(selectedJumpShip.faction, 'JumpShip');
     const cap = Math.floor(8 * (1 + 0.2 * lvl));
@@ -560,7 +856,7 @@ You chose to open as: ${openAs}
         cargoArr.forEach((entry, idx) => {
           const div = document.createElement('div');
           div.className = 'listItem' + (idx === selectedCargoIndex ? ' selected' : '');
-          div.innerHTML = `<span>${humanCargoEntry(entry)}</span><span class="muted">#${idx}</span>`;
+          div.innerHTML = `<span>${escapeHtml(humanCargoEntry(entry))}</span><span class="muted">#${idx}</span>`;
           div.addEventListener('click', () => { selectedCargoIndex = idx; updateCargoPanel(); });
           cargoListEl.appendChild(div);
         });
@@ -604,7 +900,7 @@ You chose to open as: ${openAs}
     }
 
     const sys = selectedLab.systemId ? getSystem(selectedLab.systemId) : null;
-    const sysRes = (sys && sys.resources != null) ? sys.resources : '?';
+    const sysRes = (sys && canSeeSystemStats(sys.id) && sys.resources != null) ? sys.resources : '??';
 
     researchHint.textContent = 'Lab selected. Research order applies to ALL labs of your faction in this system.';
     selectedLabEl.textContent =
@@ -670,9 +966,9 @@ You chose to open as: ${openAs}
     reportEl.innerHTML = out.join('');
   }
 
-  // --------------------
-  // Drawing / grid
-  // --------------------
+  /* =========================================================
+     DRAWING
+     ========================================================= */
   function drawGrid() {
     const scale = view.scale;
     if (scale < 25) return;
@@ -782,7 +1078,6 @@ You chose to open as: ${openAs}
   }
 
   function unitGlyph(type) {
-    // Short + distinct. (Avoids confusion at a glance.)
     if (type === 'JumpShip') return 'J';
     if (type === 'Shipyard') return 'SY';
     if (type === 'Striker') return 'S';
@@ -800,13 +1095,11 @@ You chose to open as: ${openAs}
     ctx.save();
     ctx.globalAlpha = isGhost ? 0.65 : 1;
 
-    // Scale label a bit based on unit size
     const fontSize = Math.max(10, Math.floor(size * (g.length === 2 ? 0.85 : 0.95)));
     ctx.font = `bold ${fontSize}px Arial`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    // White text with black outline for readability on any faction color
     ctx.lineWidth = 3;
     ctx.strokeStyle = '#000';
     ctx.fillStyle = '#fff';
@@ -898,12 +1191,15 @@ You chose to open as: ${openAs}
       ctx.lineWidth = 2;
       ctx.stroke();
 
+      // Label
       ctx.fillStyle = 'white';
       ctx.font = '12px Arial';
       ctx.fillText(sys.id, p.x + 22, p.y - 10);
 
-      const rText = (sys.resources == null) ? 'R:?' : `R:${sys.resources}`;
-      const vText = (sys.value == null) ? 'V:?' : `V:${sys.value}`;
+      // Improvement: hide R/V unless you have units there
+      const vis = canSeeSystemStats(sys.id);
+      const rText = vis ? ((sys.resources == null) ? 'R:?' : `R:${sys.resources}`) : 'R:??';
+      const vText = vis ? ((sys.value == null) ? 'V:?' : `V:${sys.value}`) : 'V:??';
 
       ctx.fillStyle = '#ccc';
       ctx.font = '11px Arial';
@@ -973,9 +1269,9 @@ You chose to open as: ${openAs}
     }
   }
 
-  // --------------------
-  // Hit tests + tooltips
-  // --------------------
+  /* =========================================================
+     HIT TESTS + TOOLTIPS
+     ========================================================= */
   function findSystemAtScreen(sx, sy) {
     if (!game) return null;
     for (const sys of game.systems) {
@@ -986,7 +1282,6 @@ You chose to open as: ${openAs}
     return null;
   }
 
-  // NEW: return draw-item so we have stack info
   function findDrawItemAtScreen(sx, sy) {
     if (!game) return null;
     const list = [...drawItems].reverse();
@@ -996,23 +1291,6 @@ You chose to open as: ${openAs}
       if (dist <= item.r) return item;
     }
     return null;
-  }
-
-  // Keep old helper for any legacy call sites
-  function findItemAtScreen(sx, sy) {
-    if (!game) return null;
-    const list = [...drawItems].reverse();
-    for (const item of list) {
-      const dx = sx - item.x, dy = sy - item.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist <= item.r) return item;
-    }
-    return null;
-  }
-
-  function findUnitAtScreen(sx, sy) {
-    const hit = findDrawItemAtScreen(sx, sy);
-    return hit ? hit.unit : null;
   }
 
   function showTooltip(html, pageX, pageY) {
@@ -1060,9 +1338,10 @@ You chose to open as: ${openAs}
     }
 
     if (sys) {
-      const rText = (sys.resources == null) ? '?' : sys.resources;
-      const vText = (sys.value == null) ? '?' : sys.value;
       const ownerText = (sys.owner == null) ? 'Neutral' : sys.owner;
+      const vis = canSeeSystemStats(sys.id);
+      const rText = vis ? ((sys.resources == null) ? '?' : sys.resources) : '??';
+      const vText = vis ? ((sys.value == null) ? '?' : sys.value) : '??';
 
       showTooltip(
         `<b>${escapeHtml(sys.id)}</b><br>
@@ -1080,15 +1359,14 @@ You chose to open as: ${openAs}
 
   canvas.addEventListener('mouseleave', hideTooltip);
 
-  // --------------------
-  // Selection
-  // --------------------
+  /* =========================================================
+     SELECTION
+     ========================================================= */
   function clearSelections() {
     selectedShipyard = null;
     selectedJumpShip = null;
     selectedLab = null;
     selectedUnit = null;
-    selectedUnitGroup = null;
     selectedUnitItem = null;
     selectedCargoIndex = null;
     updateBuildPanel();
@@ -1140,7 +1418,6 @@ You chose to open as: ${openAs}
     // Other unit: select stack (hit.units) so load-many works
     if (selectedUnit && selectedUnit.id === u.id) {
       selectedUnit = null;
-      selectedUnitGroup = null;
       selectedUnitItem = null;
     } else {
       selectedUnit = u;
@@ -1150,9 +1427,9 @@ You chose to open as: ${openAs}
     draw();
   });
 
-  // --------------------
-  // Drag JumpShips to move
-  // --------------------
+  /* =========================================================
+     DRAG JumpShips to move (and pan otherwise)
+     ========================================================= */
   canvas.addEventListener('mousedown', (e) => {
     if (!game) return;
 
@@ -1196,7 +1473,6 @@ You chose to open as: ${openAs}
         const r = await apiMove(unit.id, sys.id).catch(() => null);
         if (r?.success) showStatus(`Queued move: JumpShip #${unit.id} -> ${sys.id} (dist ${r.distance}).`);
         else showStatus(`Move failed: ${r?.error || 'network error'}`);
-
         await refresh(false);
       }
     }
@@ -1204,9 +1480,9 @@ You chose to open as: ${openAs}
     draggingPan = false;
   });
 
-  // --------------------
-  // Zoom
-  // --------------------
+  /* =========================================================
+     ZOOM
+     ========================================================= */
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
 
@@ -1230,13 +1506,13 @@ You chose to open as: ${openAs}
   if (zoomOutBtn) zoomOutBtn.addEventListener('click', () => { view.scale = Math.max(30, view.scale / 1.15); draw(); });
   if (resetViewBtn) resetViewBtn.addEventListener('click', () => { view.scale = 80; view.offsetX = 80; view.offsetY = 80; draw(); });
 
-  // --------------------
-  // Sidebar actions
-  // --------------------
+  /* =========================================================
+     SIDEBAR ACTIONS
+     ========================================================= */
   if (readyTurnBtn) {
     readyTurnBtn.addEventListener('click', async () => {
       if (!requireSessionOrOverlay()) return;
-      if (game?.gameOver) { showStatus(`Game over. Winner: ${game.winner ?? 'draw'}`); return; }
+      if (game?.gameOver) { showStatus(`Game over. Winner: ${game.winner ?? 'draw'}`); showEndgameOverlay(); return; }
 
       const cur = !!(game?.ready && yourFaction && game.ready[yourFaction]);
       const next = !cur;
@@ -1255,7 +1531,7 @@ You chose to open as: ${openAs}
   if (resignBtn) {
     resignBtn.addEventListener('click', async () => {
       if (!requireSessionOrOverlay()) return;
-      if (game?.gameOver) { showStatus(`Game over. Winner: ${game.winner ?? 'draw'}`); return; }
+      if (game?.gameOver) { showStatus(`Game over. Winner: ${game.winner ?? 'draw'}`); showEndgameOverlay(); return; }
 
       const cur = !!(game?.resignIntent && yourFaction && game.resignIntent[yourFaction]);
       const next = !cur;
@@ -1276,8 +1552,11 @@ You chose to open as: ${openAs}
       }
       showStatus('Resigning...');
       const r = await apiResign().catch(() => null);
-      if (r?.success) showStatus(`You resigned. Winner: ${r.winner}`);
-      else showStatus(`Resign failed: ${r?.error || 'network error'}`);
+      if (r?.success) {
+        showStatus(`You resigned. Winner: ${r.winner}`);
+      } else {
+        showStatus(`Resign failed: ${r?.error || 'network error'}`);
+      }
       await refresh(false);
     });
   }
@@ -1288,6 +1567,9 @@ You chose to open as: ${openAs}
 
       const unitsArr = [];
       for (const [type, el] of Object.entries(buildInputs)) {
+        // Skip optional missing inputs (eg Shipyard field not present in HTML)
+        if (!el) continue;
+
         const count = Math.max(0, Math.floor(Number(el?.value) || 0));
         if (count <= 0) continue;
         if (!(type in COST)) continue;
@@ -1298,7 +1580,7 @@ You chose to open as: ${openAs}
       showStatus(`Queuing for Shipyard #${selectedShipyard.id}...`);
       const r = await apiQueueBuild(selectedShipyard.id, unitsArr).catch(() => null);
       if (r?.success) {
-        showStatus(`Queued.`);
+        showStatus('Queued.');
         clearBuildInputs();
         await refresh(false);
       } else showStatus(`Queue failed: ${r?.error || 'network error'}`);
@@ -1334,7 +1616,7 @@ You chose to open as: ${openAs}
     await refresh(false);
   });
 
-  // NEW: load-many from a stack selection
+  // Load-many from a stack selection
   if (loadSelectedUnitBtn) loadSelectedUnitBtn.addEventListener('click', async () => {
     if (!selectedJumpShip || !selectedUnitItem || !selectedUnit) return;
 
@@ -1398,9 +1680,9 @@ You chose to open as: ${openAs}
     await refresh(false);
   });
 
-  // --------------------
-  // Resize + refresh
-  // --------------------
+  /* =========================================================
+     RESIZE + REFRESH
+     ========================================================= */
   function resize() {
     canvas.width = canvas.clientWidth;
     canvas.height = canvas.clientHeight;
@@ -1450,13 +1732,13 @@ You chose to open as: ${openAs}
     if (readyTurnBtn) readyTurnBtn.disabled = !!game?.gameOver;
     if (resignBtn) resignBtn.disabled = !!game?.gameOver;
 
-    // rebind selections by id
+    // Rebind selections by id
     if (selectedShipyard) selectedShipyard = game.units.find(u => u.type === 'Shipyard' && u.id === selectedShipyard.id) || null;
     if (selectedJumpShip) selectedJumpShip = game.units.find(u => u.type === 'JumpShip' && u.id === selectedJumpShip.id) || null;
     if (selectedLab) selectedLab = game.units.find(u => u.type === 'Lab' && u.id === selectedLab.id) || null;
     if (selectedUnit) selectedUnit = game.units.find(u => u.id === selectedUnit.id) || null;
 
-    // NEW: rebind stack selection after refresh
+    // Rebind stack selection after refresh
     if (selectedUnit) {
       const sysId = selectedUnit.systemId;
       const type = selectedUnit.type;
@@ -1479,7 +1761,10 @@ You chose to open as: ${openAs}
     renderReport();
     draw();
 
-    if (game?.gameOver) showStatus(`GAME OVER. Winner: ${game.winner ?? 'draw'}`);
+    if (game?.gameOver) {
+      showStatus(`GAME OVER. Winner: ${game.winner ?? 'draw'}`);
+      showEndgameOverlay();
+    }
   }
 
   // Poll status so you see when the other player readies and the turn resolves
