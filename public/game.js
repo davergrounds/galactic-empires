@@ -201,6 +201,78 @@
     return Number.isFinite(lvl) ? lvl : 0;
   }
 
+
+  /* ============================
+     SYSTEM DISPLAY NAMES (SYS-XX)
+     - Deterministic per gameId (same for both players)
+     - Stored in localStorage so it doesn't change between refreshes
+     ============================ */
+
+  const SYSNAME_KEY_PREFIX = 'GE_SYSNAMES_';
+  let sysNameMap = null; // { [realSystemId]: 'SYS-01' }
+
+  function hashString(str) {
+    // small deterministic hash (32-bit)
+    let h = 2166136261;
+    for (let i = 0; i < String(str).length; i++) {
+      h ^= String(str).charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+  }
+
+  function mulberry32(seed) {
+    return function () {
+      let t = seed += 0x6D2B79F5;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function ensureSysNameMap() {
+    if (!session.gameId || !Array.isArray(game?.systems) || game.systems.length === 0) return;
+
+    const key = SYSNAME_KEY_PREFIX + session.gameId;
+    const ids = game.systems.map(s => String(s.id));
+
+    try { sysNameMap = JSON.parse(localStorage.getItem(key) || 'null'); } catch { sysNameMap = null; }
+
+    const looksValid =
+      sysNameMap &&
+      typeof sysNameMap === 'object' &&
+      Object.keys(sysNameMap).length === ids.length &&
+      ids.every(id => typeof sysNameMap[id] === 'string');
+
+    if (looksValid) return;
+
+    // Deterministic shuffle of real IDs using gameId seed
+    const shuffled = ids.slice();
+    const rnd = mulberry32(hashString(session.gameId));
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(rnd() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+
+    const map = {};
+    shuffled.forEach((realId, idx) => {
+      map[realId] = `SYS-${String(idx + 1).padStart(2, '0')}`;
+    });
+
+    sysNameMap = map;
+    try { localStorage.setItem(key, JSON.stringify(map)); } catch {}
+  }
+
+  function displaySysId(realId) {
+    const id = String(realId ?? '');
+    if (!id) return '';
+    return (sysNameMap && sysNameMap[id]) ? sysNameMap[id] : id;
+  }
+
+  function displaySys(sys) {
+    return displaySysId(sys?.id);
+  }
+
   function canSeeSystemStats(sysId) {
     // Improvement: You should not see resources/value of a system unless you have units there.
     if (!game || !yourFaction) return false;
@@ -705,7 +777,7 @@ You chose to open as: ${openAs}
 
     buildHint.textContent = 'Shipyard selected. Queue applies ONLY to this shipyard.';
     selectedShipyardEl.textContent =
-      `Selected Shipyard: #${selectedShipyard.id} (${selectedShipyard.faction}) @ ${selectedShipyard.systemId} | ` +
+      `Selected Shipyard: #${selectedShipyard.id} (${selectedShipyard.faction}) @ ${displaySysId(selectedShipyard.systemId)} | ` +
       `System R:${sysRes} | Spend cap: ${cap} | Queue entries: ${qEntries}`;
 
     // Render queue list if present
@@ -839,7 +911,7 @@ You chose to open as: ${openAs}
     const cap = Math.floor(8 * (1 + 0.2 * lvl));
 
     cargoHint.textContent = 'JumpShip selected.';
-    selectedJumpShipEl.textContent = `Selected JumpShip: #${selectedJumpShip.id} (${selectedJumpShip.faction}) @ ${selectedJumpShip.systemId || '—'}`;
+    selectedJumpShipEl.textContent = `Selected JumpShip: #${selectedJumpShip.id} (${selectedJumpShip.faction}) @ ${displaySysId(selectedJumpShip.systemId) || '—'}`;
     if (cargoSummaryEl) cargoSummaryEl.textContent = `Cargo used: ${used}/${cap} | System resources: ${sysRes}`;
 
     const cargoArr = Array.isArray(selectedJumpShip.cargo) ? selectedJumpShip.cargo : [];
@@ -880,7 +952,7 @@ You chose to open as: ${openAs}
     if (selectedUnitLine) {
       const stackN = selectedUnitItem?.units?.length || (selectedUnit ? 1 : 0);
       selectedUnitLine.textContent = selectedUnit
-        ? `Selected unit: ${selectedUnit.type} @ ${selectedUnit.systemId || '—'} (${selectedUnit.faction}) | available: x${stackN}`
+        ? `Selected unit: ${selectedUnit.type} @ ${displaySysId(selectedUnit.systemId) || '—'} (${selectedUnit.faction}) | available: x${stackN}`
         : '';
     }
 
@@ -904,7 +976,7 @@ You chose to open as: ${openAs}
 
     researchHint.textContent = 'Lab selected. Research order applies to ALL labs of your faction in this system.';
     selectedLabEl.textContent =
-      `Selected Lab: #${selectedLab.id} (${selectedLab.faction}) @ ${selectedLab.systemId} | ` +
+      `Selected Lab: #${selectedLab.id} (${selectedLab.faction}) @ ${displaySysId(selectedLab.systemId)} | ` +
       `System R:${sysRes}`;
 
     if (researchTechSelect && researchTechSelect.options.length === 0) {
@@ -1160,6 +1232,68 @@ You chose to open as: ${openAs}
     ctx.restore();
   }
 
+
+  function getUnitDestinationSystemId(u) {
+    if (!u) return null;
+    // Try several likely shapes depending on server state format
+    return (
+      u.destinationSystemId ??
+      u.destSystemId ??
+      u.toSystemId ??
+      u.moveToSystemId ??
+      u.moveTo ??
+      u.order?.toSystemId ??
+      u.order?.moveToSystemId ??
+      u.orders?.move?.toSystemId ??
+      null
+    );
+  }
+
+  function drawJumpShipDestLines() {
+    if (!game?.units || !game?.systems) return;
+
+    ctx.save();
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+
+    for (const u of game.units) {
+      if (u.type !== 'JumpShip') continue;
+
+      const toId = getUnitDestinationSystemId(u);
+      if (!toId || toId === u.systemId) continue;
+
+      const fromSys = getSystem(u.systemId);
+      const toSys = getSystem(toId);
+      if (!fromSys || !toSys) continue;
+
+      const a = worldToScreen(fromSys.x, fromSys.y);
+      const b = worldToScreen(toSys.x, toSys.y);
+
+      const col = FACTION_COLOR[u.faction] || '#fff';
+      ctx.strokeStyle = col;
+      ctx.globalAlpha = 0.55;
+
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+
+      // Arrow head
+      const ang = Math.atan2(b.y - a.y, b.x - a.x);
+      const ah = 10;
+      ctx.fillStyle = col;
+      ctx.globalAlpha = 0.45;
+      ctx.beginPath();
+      ctx.moveTo(b.x, b.y);
+      ctx.lineTo(b.x - Math.cos(ang - 0.4) * ah, b.y - Math.sin(ang - 0.4) * ah);
+      ctx.lineTo(b.x - Math.cos(ang + 0.4) * ah, b.y - Math.sin(ang + 0.4) * ah);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
   function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = 'black';
@@ -1194,7 +1328,7 @@ You chose to open as: ${openAs}
       // Label
       ctx.fillStyle = 'white';
       ctx.font = '12px Arial';
-      ctx.fillText(sys.id, p.x + 22, p.y - 10);
+      ctx.fillText(displaySysId(sys.id), p.x + 22, p.y - 10);
 
       // Improvement: hide R/V unless you have units there
       const vis = canSeeSystemStats(sys.id);
@@ -1205,6 +1339,9 @@ You chose to open as: ${openAs}
       ctx.font = '11px Arial';
       ctx.fillText(`${rText} ${vText}`, p.x + 22, p.y + 6);
     }
+
+    // JumpShip destination lines
+    drawJumpShipDestLines();
 
     // units around systems
     for (const sys of game.systems) {
@@ -1322,6 +1459,10 @@ You chose to open as: ${openAs}
 
     if (u) {
       const used = (u.type === 'JumpShip') ? cargoUsedLocal(u) : null;
+      const destId = getUnitDestinationSystemId(u);
+      const destLine = (u.type === 'JumpShip' && destId && destId !== u.systemId)
+        ? `Destination: ${escapeHtml(displaySysId(destId))}<br>`
+        : '';
       const stackCount = Math.max(1, Math.floor(Number(u._stackCount || 1)));
       const extra = (u.type !== 'JumpShip' && stackCount > 1) ? `Stack: ${stackCount} ${u.type}s<br>` : '';
 
@@ -1330,6 +1471,7 @@ You chose to open as: ${openAs}
          Faction: ${escapeHtml(u.faction)}<br>
          Hits: ${escapeHtml(u.hitsRemaining ?? '?')}<br>
          ${extra}
+         ${destLine}
          ${u.type === 'JumpShip' ? `Cargo: ${escapeHtml(used)}/?` : '' }
          ${u.type === 'Shipyard' ? `<br>Queue entries: ${(u.buildQueue?.length ?? 0)}` : ''}`,
         e.pageX, e.pageY
@@ -1344,7 +1486,7 @@ You chose to open as: ${openAs}
       const vText = vis ? ((sys.value == null) ? '?' : sys.value) : '??';
 
       showTooltip(
-        `<b>${escapeHtml(sys.id)}</b><br>
+        `<b>${escapeHtml(displaySysId(sys.id))}</b><br>
          Owner: ${escapeHtml(ownerText)}<br>
          Resources: ${escapeHtml(rText)}<br>
          Value: ${escapeHtml(vText)}<br>
@@ -1471,7 +1613,7 @@ You chose to open as: ${openAs}
       const sys = findSystemAtScreen(sx, sy);
       if (sys && unit && unit.systemId !== sys.id) {
         const r = await apiMove(unit.id, sys.id).catch(() => null);
-        if (r?.success) showStatus(`Queued move: JumpShip #${unit.id} -> ${sys.id} (dist ${r.distance}).`);
+        if (r?.success) showStatus(`Queued move: JumpShip #${unit.id} -> ${displaySysId(sys.id)} (dist ${r.distance}).`);
         else showStatus(`Move failed: ${r?.error || 'network error'}`);
         await refresh(false);
       }
@@ -1723,6 +1865,9 @@ You chose to open as: ${openAs}
 
     game = r;
     yourFaction = r.yourFaction;
+
+    ensureSysNameMap();
+
 
     if (turnEl) turnEl.textContent = `Turn: ${game.turn}`;
     if (viewerEl) viewerEl.textContent = `You: ${yourFaction}`;
