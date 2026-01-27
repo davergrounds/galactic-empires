@@ -124,8 +124,11 @@ function randomInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+// All systems are SYS-XX
 function makeSystemId(prefix, n) {
-  return `${prefix}-${String(n).padStart(2, '0')}`;
+  const nn = Math.max(1, Math.floor(Number(n) || 1));
+  const pad = nn < 100 ? 2 : (nn < 1000 ? 3 : 4);
+  return `${prefix}-${String(nn).padStart(pad, '0')}`;
 }
 
 function generateNewGame(cfg) {
@@ -156,9 +159,13 @@ function generateNewGame(cfg) {
     return true;
   }
 
-  // NOTE: if you later implement hidden homeworlds, do it here.
-  const ithHome = { id: 'ITH-HOME', x: 1, y: 1, owner: 'ithaxi', value: 6, resources: homeSysRes };
-  const hiveHome = { id: 'HIVE-HOME', x: mapW - 2, y: mapH - 2, owner: 'hive', value: 6, resources: homeSysRes };
+  // Create SYS-XX IDs for ALL systems, including the two homes
+  let sysCounter = 1;
+  const ithHomeId = makeSystemId('SYS', sysCounter++);
+  const hiveHomeId = makeSystemId('SYS', sysCounter++);
+
+  const ithHome = { id: ithHomeId, x: 1, y: 1, owner: 'ithaxi', value: 6, resources: homeSysRes };
+  const hiveHome = { id: hiveHomeId, x: mapW - 2, y: mapH - 2, owner: 'hive', value: 6, resources: homeSysRes };
 
   reserve(ithHome.x, ithHome.y);
   reserve(hiveHome.x, hiveHome.y);
@@ -174,7 +181,7 @@ function generateNewGame(cfg) {
     if (!reserve(x, y)) continue;
     placed++;
     systems.push({
-      id: makeSystemId('SYS', placed),
+      id: makeSystemId('SYS', sysCounter++),
       x, y,
       owner: null,
       value: randomInt(1, 12),
@@ -186,7 +193,7 @@ function generateNewGame(cfg) {
   const units = [];
 
   for (const f of factions) {
-    const homeId = (f === 'ithaxi') ? 'ITH-HOME' : 'HIVE-HOME';
+    const homeId = (f === 'ithaxi') ? ithHomeId : hiveHomeId;
     for (const [type, count] of Object.entries(startUnits)) {
       for (let i = 0; i < count; i++) {
         units.push(createUnit(type, f, homeId, nextIdRef));
@@ -200,11 +207,12 @@ function generateNewGame(cfg) {
     turn: 1,
     nextUnitId: nextIdRef.value,
     lastTurnLog: [],
+    lastCombatSystems: [], // NEW: list of systemIds where combat happened last resolved turn
     gameOver: false,
     winner: null,
 
-    ready: { ithaxi: false, hive: false }, // both must ready
-    resignIntent: { ithaxi: false, hive: false }, // toggleable "armed resign" per player
+    ready: { ithaxi: false, hive: false },
+    resignIntent: { ithaxi: false, hive: false },
 
     map: { w: mapW, h: mapH },
 
@@ -329,6 +337,38 @@ function hasEnemyPresence(game, systemId, faction) {
   return false;
 }
 
+// NEW: ownership rule
+function updateSystemOwnership(game, log) {
+  for (const sys of game.systems) {
+    const ith = game.units.filter(u => u.systemId === sys.id && u.faction === 'ithaxi').length;
+    const hiv = game.units.filter(u => u.systemId === sys.id && u.faction === 'hive').length;
+
+    const prev = sys.owner ?? null;
+
+    if (prev === null) {
+      // capture only if one side is present alone
+      if (ith > 0 && hiv === 0) sys.owner = 'ithaxi';
+      else if (hiv > 0 && ith === 0) sys.owner = 'hive';
+    } else if (prev === 'ithaxi') {
+      // ithaxi keeps control until they have zero units there
+      if (ith === 0) {
+        if (hiv > 0) sys.owner = 'hive';
+        else sys.owner = null;
+      }
+    } else if (prev === 'hive') {
+      if (hiv === 0) {
+        if (ith > 0) sys.owner = 'ithaxi';
+        else sys.owner = null;
+      }
+    }
+
+    const now = sys.owner ?? null;
+    if (now !== prev) {
+      log.push(`[Control ${sys.id}] owner ${prev ?? 'Neutral'} -> ${now ?? 'Neutral'}`);
+    }
+  }
+}
+
 function autoUnloadHostileJumpShips(game, log) {
   for (const ship of game.units) {
     if (ship.type !== 'JumpShip') continue;
@@ -442,7 +482,7 @@ function applyBlocksAndCasualties(game, systemId, defendingFaction, incomingHits
 
 function resolveCombatInSystem(game, systemId, log) {
   const factions = factionsPresentInSystem(game, systemId);
-  if (factions.length < 2) return;
+  if (factions.length < 2) return false;
 
   const a = factions[0];
   const b = factions[1];
@@ -460,10 +500,17 @@ function resolveCombatInSystem(game, systemId, log) {
   log.push(`[Combat ${systemId}] factions=${a} vs ${b} | hits: ${a}:${hitsA} ${b}:${hitsB} | destroyed: ${destroyedAll.length ? destroyedAll.join(',') : 'none'}`);
   log.push(`  - ${a} took ${hitsB} hits, blocked by escorts=${resA.cancelledByEscorts}, blockers=${resA.cancelledByBlockers} (blockersDestroyed=${resA.blockersDestroyed}), applied=${resA.appliedHits}, destroyed=${resA.destroyedIds.length ? resA.destroyedIds.join(',') : 'none'}`);
   log.push(`  - ${b} took ${hitsA} hits, blocked by escorts=${resB.cancelledByEscorts}, blockers=${resB.cancelledByBlockers} (blockersDestroyed=${resB.blockersDestroyed}), applied=${resB.appliedHits}, destroyed=${resB.destroyedIds.length ? resB.destroyedIds.join(',') : 'none'}`);
+
+  return true;
 }
 
 function resolveAllCombats(game, log) {
-  for (const sys of game.systems) resolveCombatInSystem(game, sys.id, log);
+  const combatSystems = [];
+  for (const sys of game.systems) {
+    const did = resolveCombatInSystem(game, sys.id, log);
+    if (did) combatSystems.push(sys.id);
+  }
+  game.lastCombatSystems = combatSystems;
 }
 
 // Research
@@ -554,6 +601,9 @@ function resolveTurnInternal(game) {
   const log = [];
   game.lastTurnLog = log;
 
+  // Reset combat markers for this turn
+  game.lastCombatSystems = [];
+
   // Snapshot system resources at start of turn
   const startResources = new Map();
   for (const sys of game.systems) startResources.set(sys.id, sys.resources);
@@ -566,11 +616,17 @@ function resolveTurnInternal(game) {
     }
   }
 
+  // 1b) Ownership updates after arrivals (capture neutrals if uncontested)
+  updateSystemOwnership(game, log);
+
   // 2) Auto-unload units if in hostile system
   autoUnloadHostileJumpShips(game, log);
 
   // 3) Combat
   resolveAllCombats(game, log);
+
+  // 3a) Ownership updates after combat casualties
+  updateSystemOwnership(game, log);
 
   // 3b) Check game end
   checkGameOverAndSetWinner(game, log);
@@ -609,7 +665,7 @@ function resolveTurnInternal(game) {
       spendLeft -= cost;
       spent += cost;
 
-      // create new unit
+      // create new unit (YES, you can build a Shipyard even if one already exists in the system)
       const nextIdRef = { value: game.nextUnitId };
       const nu = createUnit(type, sy.faction, sy.systemId, nextIdRef);
       game.nextUnitId = nextIdRef.value;
@@ -690,7 +746,7 @@ function computeVisibleSystemsForFaction(game, faction) {
 
 function parseSystemIdFromLogLine(line) {
   const s = String(line ?? '');
-  let m = s.match(/^\[(Combat|Mining|Research|AutoUnload)\s+([^\]\s]+)\]/);
+  let m = s.match(/^\[(Combat|Mining|Research|AutoUnload|Control)\s+([^\]\s]+)\]/);
   if (m) return m[2];
 
   m = s.match(/^\[Shipyard\s+\d+\s+@\s+([^\]\s]+)\]/);
@@ -729,6 +785,9 @@ function maskedStateForViewer(game, faction) {
     return vis.has(sysId);
   });
 
+  const lastCombatSystems = (Array.isArray(game.lastCombatSystems) ? game.lastCombatSystems : [])
+    .filter(sysId => vis.has(sysId));
+
   return {
     turn: game.turn,
     gameOver: game.gameOver,
@@ -741,7 +800,8 @@ function maskedStateForViewer(game, faction) {
     systems,
     units,
     lastTurnLog,
-    stats: game.stats // <-- included so endgame screen can show totals
+    lastCombatSystems,
+    stats: game.stats
   };
 }
 
