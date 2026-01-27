@@ -201,18 +201,15 @@
     return Number.isFinite(lvl) ? lvl : 0;
   }
 
-
   /* ============================
      SYSTEM DISPLAY NAMES (SYS-XX)
-     - Deterministic per gameId (same for both players)
-     - Stored in localStorage so it doesn't change between refreshes
+     - You can keep this mapping, but note: server already uses SYS-XX.
+     - This is only for display and does NOT change real IDs used for API calls.
      ============================ */
-
   const SYSNAME_KEY_PREFIX = 'GE_SYSNAMES_';
   let sysNameMap = null; // { [realSystemId]: 'SYS-01' }
 
   function hashString(str) {
-    // small deterministic hash (32-bit)
     let h = 2166136261;
     for (let i = 0; i < String(str).length; i++) {
       h ^= String(str).charCodeAt(i);
@@ -246,7 +243,6 @@
 
     if (looksValid) return;
 
-    // Deterministic shuffle of real IDs using gameId seed
     const shuffled = ids.slice();
     const rnd = mulberry32(hashString(session.gameId));
     for (let i = shuffled.length - 1; i > 0; i--) {
@@ -274,7 +270,6 @@
   }
 
   function canSeeSystemStats(sysId) {
-    // Improvement: You should not see resources/value of a system unless you have units there.
     if (!game || !yourFaction) return false;
     return game.units?.some(u => u.systemId === sysId && u.faction === yourFaction) || false;
   }
@@ -287,11 +282,9 @@
   }
 
   // --------------------
-  // Ownership + combat markers (client-side helpers)
+  // Ownership + combat markers
   // --------------------
-  // NOTE: Ideal source of truth is server-side sys.owner and combat logs.
-  // These helpers provide sensible UI fallbacks if that data is missing.
-  let combatSystems = new Set(); // systemIds where combat occurred last resolved turn
+  let combatSystems = new Set(); // systemIds where combat occurred last resolved turn (server-provided)
 
   function inferOwnerForSystem(sysId) {
     if (!game || !Array.isArray(game.units)) return null;
@@ -760,7 +753,6 @@ You chose to open as: ${openAs}
 
   if (openSetupBtn) {
     openSetupBtn.addEventListener('click', () => {
-      // Return to setup: clear saved session + URL so you can start/join a new game
       clearSelections();
       clearSession();
       clearUrl();
@@ -797,8 +789,6 @@ You chose to open as: ${openAs}
     const qEntries = Array.isArray(queue) ? queue.length : 0;
 
     const sys = selectedShipyard.systemId ? getSystem(selectedShipyard.systemId) : null;
-
-    // Show sys resources only if you have units there (fog-of-war rule)
     const sysRes = (sys && canSeeSystemStats(sys.id) && sys.resources != null) ? sys.resources : '??';
 
     const lvl = techLevel(selectedShipyard.faction, 'Shipyard');
@@ -809,7 +799,7 @@ You chose to open as: ${openAs}
       `Selected Shipyard: #${selectedShipyard.id} (${selectedShipyard.faction}) @ ${displaySysId(selectedShipyard.systemId)} | ` +
       `System R:${sysRes} | Spend cap: ${cap} | Queue entries: ${qEntries}`;
 
-    // Render queue list if present
+    // Render queue list (server queue entries are typically {type} one-per-unit)
     if (shipyardQueueList) {
       shipyardQueueList.innerHTML = '';
       const arr = Array.isArray(selectedShipyard.buildQueue) ? selectedShipyard.buildQueue : [];
@@ -829,8 +819,7 @@ You chose to open as: ${openAs}
 
           const left = document.createElement('div');
           const type = job?.type ?? '?';
-          const count = job?.count ?? '?';
-          left.textContent = `${type} x${count}`;
+          left.textContent = `${type}`;
 
           const right = document.createElement('div');
           right.style.display = 'flex';
@@ -1039,20 +1028,11 @@ You chose to open as: ${openAs}
 
   function renderReport() {
     if (!reportEl) return;
-    const lines = Array.isArray(game?.lastTurnLog) ? game.lastTurnLog : [];
-    // Extract combat locations for UI markers (expects SYS-XX or similar in combat log lines)
-    combatSystems = new Set();
-    for (const raw of lines) {
-      const line = String(raw ?? '');
-      if (!line.includes('Combat')) continue;
-      // Prefer explicit bracket header: [Combat SYS-01] or [Combat at SYS-01]
-      let m = line.match(/^\[Combat(?:\s+at)?\s+([^\]\s]+)\]/i);
-      if (m && m[1]) { combatSystems.add(m[1]); continue; }
-      // Fallback: any SYS-## style tokens in the line
-      const toks = line.match(/SYS-\d+/g);
-      if (toks) for (const t of toks) combatSystems.add(t);
-    }
 
+    // Use server-provided combat markers (already fog-filtered)
+    combatSystems = new Set(Array.isArray(game?.lastCombatSystems) ? game.lastCombatSystems : []);
+
+    const lines = Array.isArray(game?.lastTurnLog) ? game.lastTurnLog : [];
     if (lines.length === 0) { reportEl.innerHTML = `<div class="muted">(no visible events yet)</div>`; return; }
 
     const out = [];
@@ -1274,11 +1254,11 @@ You chose to open as: ${openAs}
     ctx.restore();
   }
 
-
+  // ✅ FIX: server uses `inTransit` for destination
   function getUnitDestinationSystemId(u) {
     if (!u) return null;
-    // Try several likely shapes depending on server state format
     return (
+      u.inTransit ??                // <-- main one
       u.destinationSystemId ??
       u.destSystemId ??
       u.toSystemId ??
@@ -1366,6 +1346,18 @@ You chose to open as: ${openAs}
       ctx.strokeStyle = '#111';
       ctx.lineWidth = 2;
       ctx.stroke();
+
+      // ✅ FIX: combat marker (red ring) from server-provided lastCombatSystems
+      if (combatSystems && combatSystems.has(sys.id)) {
+        ctx.save();
+        ctx.globalAlpha = 0.9;
+        ctx.strokeStyle = '#ff3b30';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r + 6, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
 
       // Label
       ctx.fillStyle = 'white';
@@ -1751,7 +1743,6 @@ You chose to open as: ${openAs}
 
       const unitsArr = [];
       for (const [type, el] of Object.entries(buildInputs)) {
-        // Skip optional missing inputs (eg Shipyard field not present in HTML)
         if (!el) continue;
 
         const count = Math.max(0, Math.floor(Number(el?.value) || 0));
@@ -1886,7 +1877,6 @@ You chose to open as: ${openAs}
     const b = rd.hive ? 'READY' : 'not ready';
     readyStatusEl.textContent = `Ready: ithaxi=${a} | hive=${b}`;
 
-    // Arm button state for the local player
     if (yourFaction) {
       setButtonArmed(readyTurnBtn, !!rd[yourFaction]);
       const ri = game?.resignIntent || { ithaxi: false, hive: false };
@@ -1909,7 +1899,6 @@ You chose to open as: ${openAs}
     yourFaction = r.yourFaction;
 
     ensureSysNameMap();
-
 
     if (turnEl) turnEl.textContent = `Turn: ${game.turn}`;
     if (viewerEl) viewerEl.textContent = `You: ${yourFaction}`;
@@ -1953,7 +1942,6 @@ You chose to open as: ${openAs}
       showEndgameOverlay();
     }
   }
-
 
   // --------------------
   // Turn-resolved popup
@@ -2040,7 +2028,6 @@ You chose to open as: ${openAs}
     if (st.turn !== lastSeenTurn) {
       lastSeenTurn = st.turn;
       await refresh(false);
-      // Popup so you don't miss the resolution
       showTurnResolvedPopup(st.turn);
     }
   }
