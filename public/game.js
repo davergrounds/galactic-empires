@@ -286,6 +286,35 @@
       .replace(/>/g, '&gt;');
   }
 
+  // --------------------
+  // Ownership + combat markers (client-side helpers)
+  // --------------------
+  // NOTE: Ideal source of truth is server-side sys.owner and combat logs.
+  // These helpers provide sensible UI fallbacks if that data is missing.
+  let combatSystems = new Set(); // systemIds where combat occurred last resolved turn
+
+  function inferOwnerForSystem(sysId) {
+    if (!game || !Array.isArray(game.units)) return null;
+    let hasI = false, hasH = false;
+    for (const u of game.units) {
+      if (!u || u.systemId !== sysId) continue;
+      if (u.faction === 'ithaxi') hasI = true;
+      else if (u.faction === 'hive') hasH = true;
+    }
+    if (hasI && !hasH) return 'ithaxi';
+    if (hasH && !hasI) return 'hive';
+    return null;
+  }
+
+  function displayOwnerForSystem(sys) {
+    return (sys && sys.owner) || inferOwnerForSystem(sys?.id) || 'neutral';
+  }
+
+  function jumpshipCapForFaction(faction) {
+    const lvl = techLevel(faction, 'JumpShip');
+    return Math.floor(8 * (1 + 0.2 * lvl));
+  }
+
   /* =========================================================
      ENDGAME OVERLAY (dynamic)
      ========================================================= */
@@ -1011,6 +1040,19 @@ You chose to open as: ${openAs}
   function renderReport() {
     if (!reportEl) return;
     const lines = Array.isArray(game?.lastTurnLog) ? game.lastTurnLog : [];
+    // Extract combat locations for UI markers (expects SYS-XX or similar in combat log lines)
+    combatSystems = new Set();
+    for (const raw of lines) {
+      const line = String(raw ?? '');
+      if (!line.includes('Combat')) continue;
+      // Prefer explicit bracket header: [Combat SYS-01] or [Combat at SYS-01]
+      let m = line.match(/^\[Combat(?:\s+at)?\s+([^\]\s]+)\]/i);
+      if (m && m[1]) { combatSystems.add(m[1]); continue; }
+      // Fallback: any SYS-## style tokens in the line
+      const toks = line.match(/SYS-\d+/g);
+      if (toks) for (const t of toks) combatSystems.add(t);
+    }
+
     if (lines.length === 0) { reportEl.innerHTML = `<div class="muted">(no visible events yet)</div>`; return; }
 
     const out = [];
@@ -1315,7 +1357,7 @@ You chose to open as: ${openAs}
       const p = worldToScreen(sys.x, sys.y);
       const r = 18;
 
-      const owner = sys.owner || 'neutral';
+      const owner = displayOwnerForSystem(sys);
       ctx.fillStyle = FACTION_COLOR[owner] || FACTION_COLOR.neutral;
       ctx.beginPath();
       ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
@@ -1472,7 +1514,7 @@ You chose to open as: ${openAs}
          Hits: ${escapeHtml(u.hitsRemaining ?? '?')}<br>
          ${extra}
          ${destLine}
-         ${u.type === 'JumpShip' ? `Cargo: ${escapeHtml(used)}/?` : '' }
+         ${u.type === 'JumpShip' ? (() => { const cap = jumpshipCapForFaction(u.faction); return `Cargo: ${escapeHtml(used)}/${escapeHtml(cap)}`; })() : '' }
          ${u.type === 'Shipyard' ? `<br>Queue entries: ${(u.buildQueue?.length ?? 0)}` : ''}`,
         e.pageX, e.pageY
       );
@@ -1912,6 +1954,76 @@ You chose to open as: ${openAs}
     }
   }
 
+
+  // --------------------
+  // Turn-resolved popup
+  // --------------------
+  let turnOverlay = null;
+  let turnOverlayBody = null;
+
+  function ensureTurnOverlay() {
+    if (turnOverlay) return;
+    turnOverlay = document.createElement('div');
+    turnOverlay.style.position = 'fixed';
+    turnOverlay.style.left = '0';
+    turnOverlay.style.top = '0';
+    turnOverlay.style.width = '100vw';
+    turnOverlay.style.height = '100vh';
+    turnOverlay.style.background = 'rgba(0,0,0,0.8)';
+    turnOverlay.style.display = 'none';
+    turnOverlay.style.zIndex = '9999';
+    turnOverlay.style.alignItems = 'center';
+    turnOverlay.style.justifyContent = 'center';
+
+    const card = document.createElement('div');
+    card.style.width = 'min(820px, 94vw)';
+    card.style.maxHeight = '86vh';
+    card.style.overflow = 'auto';
+    card.style.background = '#111';
+    card.style.border = '1px solid #333';
+    card.style.borderRadius = '12px';
+    card.style.padding = '16px';
+    card.style.boxShadow = '0 10px 30px rgba(0,0,0,0.5)';
+
+    const title = document.createElement('div');
+    title.style.fontSize = '18px';
+    title.style.fontWeight = '700';
+    title.style.marginBottom = '10px';
+    title.textContent = 'Turn Resolved';
+
+    turnOverlayBody = document.createElement('div');
+    turnOverlayBody.style.fontSize = '13px';
+    turnOverlayBody.style.lineHeight = '1.45';
+    turnOverlayBody.style.color = '#ddd';
+
+    const btnRow = document.createElement('div');
+    btnRow.style.display = 'flex';
+    btnRow.style.gap = '10px';
+    btnRow.style.marginTop = '12px';
+
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = 'Close';
+    closeBtn.onclick = () => { turnOverlay.style.display = 'none'; };
+
+    btnRow.appendChild(closeBtn);
+
+    card.appendChild(title);
+    card.appendChild(turnOverlayBody);
+    card.appendChild(btnRow);
+
+    turnOverlay.appendChild(card);
+    document.body.appendChild(turnOverlay);
+  }
+
+  function showTurnResolvedPopup(turnNumber) {
+    ensureTurnOverlay();
+    const lines = Array.isArray(game?.lastTurnLog) ? game.lastTurnLog : [];
+    const safe = lines.map(x => `<div class="reportLine">${escapeHtml(String(x ?? ''))}</div>`).join('');
+    turnOverlayBody.innerHTML = `<div style="margin-bottom:8px"><b>New turn:</b> ${escapeHtml(turnNumber)}</div>` +
+      (safe ? `<div style="border-top:1px solid #333; padding-top:8px">${safe}</div>` : `<div class="muted">(no visible events)</div>`);
+    turnOverlay.style.display = 'flex';
+  }
+
   // Poll status so you see when the other player readies and the turn resolves
   let lastSeenTurn = null;
   async function poll() {
@@ -1928,6 +2040,8 @@ You chose to open as: ${openAs}
     if (st.turn !== lastSeenTurn) {
       lastSeenTurn = st.turn;
       await refresh(false);
+      // Popup so you don't miss the resolution
+      showTurnResolvedPopup(st.turn);
     }
   }
 
