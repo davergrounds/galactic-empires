@@ -2016,54 +2016,6 @@ async function refresh(force) {
 }
 
 
-    game = r;
-    yourFaction = r.yourFaction;
-
-    ensureSysNameMap();
-
-    if (turnEl) turnEl.textContent = `Turn: ${game.turn}`;
-    if (viewerEl) viewerEl.textContent = `You: ${yourFaction}`;
-    if (gameInfoEl) gameInfoEl.textContent = `Game: ${session.gameId}`;
-    updateReadyStatus();
-
-    if (readyTurnBtn) readyTurnBtn.disabled = !!game?.gameOver;
-    if (resignBtn) resignBtn.disabled = !!game?.gameOver;
-
-    // Rebind selections by id
-    if (selectedShipyard) selectedShipyard = game.units.find(u => u.type === 'Shipyard' && u.id === selectedShipyard.id) || null;
-    if (selectedJumpShip) selectedJumpShip = game.units.find(u => u.type === 'JumpShip' && u.id === selectedJumpShip.id) || null;
-    if (selectedLab) selectedLab = game.units.find(u => u.type === 'Lab' && u.id === selectedLab.id) || null;
-    if (selectedUnit) selectedUnit = game.units.find(u => u.id === selectedUnit.id) || null;
-
-    // Rebind stack selection after refresh
-    if (selectedUnit) {
-      const sysId = selectedUnit.systemId;
-      const type = selectedUnit.type;
-      const faction = selectedUnit.faction;
-      const unitsHere = game.units.filter(x => x.systemId === sysId && x.type === type && x.faction === faction);
-      selectedUnitItem = { unit: selectedUnit, units: unitsHere };
-    } else {
-      selectedUnitItem = null;
-    }
-
-    if (selectedJumpShip) {
-      const arr = Array.isArray(selectedJumpShip.cargo) ? selectedJumpShip.cargo : [];
-      if (selectedCargoIndex != null && (selectedCargoIndex < 0 || selectedCargoIndex >= arr.length)) selectedCargoIndex = null;
-    } else selectedCargoIndex = null;
-
-    updateBuildPanel();
-    updateCargoPanel();
-    updateResearchPanel();
-    renderTechLevels();
-    renderReport();
-    draw();
-
-    if (game?.gameOver) {
-      showStatus(`GAME OVER. Winner: ${game.winner ?? 'draw'}`);
-      showEndgameOverlay();
-    }
-  }
-
   // --------------------
   // Turn-resolved popup
   // --------------------
@@ -2165,6 +2117,7 @@ async function refresh(force) {
 
   init();
 })();
+
 
 
 
