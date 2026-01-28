@@ -1255,6 +1255,69 @@ You chose to open as: ${openAs}
   }
 
   // ✅ FIX: server uses `inTransit` for destination
+function getUnitDestinationSystemId(u) {
+  if (!u) return null;
+  return (
+    u.inTransit ??                // <-- main one
+    u.destinationSystemId ??
+    u.destSystemId ??
+    u.toSystemId ??
+    u.moveToSystemId ??
+    u.moveTo ??
+    u.order?.toSystemId ??
+    u.order?.moveToSystemId ??
+    u.orders?.move?.toSystemId ??
+    null
+  );
+}
+
+function drawJumpShipDestLines() {
+  if (!game?.units || !game?.systems) return;
+
+  ctx.save();
+  ctx.lineWidth = 2;
+  ctx.setLineDash([6, 4]);
+
+  for (const u of game.units) {
+    if (u.type !== 'JumpShip') continue;
+
+    const toId = getUnitDestinationSystemId(u);
+    if (!toId || toId === u.systemId) continue;
+
+    const fromSys = getSystem(u.systemId);
+    const toSys = getSystem(toId);
+    if (!fromSys || !toSys) continue;
+
+    const a = worldToScreen(fromSys.x, fromSys.y);
+    const b = worldToScreen(toSys.x, toSys.y);
+
+    const col = FACTION_COLOR[u.faction] || '#fff';
+    ctx.strokeStyle = col;
+    ctx.globalAlpha = 0.55;
+
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+
+    // Arrow head
+    const ang = Math.atan2(b.y - a.y, b.x - a.x);
+    const ah = 10;
+    ctx.fillStyle = col;
+    ctx.globalAlpha = 0.45;
+    ctx.beginPath();
+    ctx.moveTo(b.x, b.y);
+    ctx.lineTo(b.x - Math.cos(ang - 0.4) * ah, b.y - Math.sin(ang - 0.4) * ah);
+    ctx.lineTo(b.x - Math.cos(ang + 0.4) * ah, b.y - Math.sin(ang + 0.4) * ah);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+
+  // ✅ FIX: server uses `inTransit` for destination
   function getUnitDestinationSystemId(u) {
     if (!u) return null;
     return (
@@ -2044,3 +2107,4 @@ You chose to open as: ${openAs}
 
   init();
 })();
+
