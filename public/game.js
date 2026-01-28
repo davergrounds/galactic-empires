@@ -1098,50 +1098,62 @@ You chose to open as: ${openAs}
     ctx.restore();
   }
 
-  function buildDrawItemsForSystem(sys) {
-    const unitsHere = game.units.filter(u => u.systemId === sys.id);
-    if (unitsHere.length === 0) return [];
+function buildDrawItemsForSystem(sys) {
+  const unitsHere = game.units.filter(u => u.systemId === sys.id);
+  if (unitsHere.length === 0) return [];
 
-    const jumpships = unitsHere.filter(u => u.type === 'JumpShip');
-    const stackables = unitsHere.filter(u => u.type !== 'JumpShip');
+  // ✅ Treat these as "always separate" (not stackable)
+  const nonStackTypes = new Set(['JumpShip', 'Shipyard']);
 
-    const byKey = new Map();
-    for (const u of stackables) {
-      const key = `${u.type}|${u.faction || 'neutral'}`;
-      if (!byKey.has(key)) byKey.set(key, []);
-      byKey.get(key).push(u);
-    }
+  const nonStack = unitsHere.filter(u => nonStackTypes.has(u.type));
+  const stackables = unitsHere.filter(u => !nonStackTypes.has(u.type));
 
-    const stacks = [];
-    for (const [key, list] of byKey.entries()) {
-      list.sort((a, b) => a.id - b.id);
-      stacks.push({ kind: 'stack', unit: list[0], units: list, sysId: sys.id, stackKey: key });
-    }
+  const byKey = new Map();
+  for (const u of stackables) {
+    const key = `${u.type}|${u.faction || 'neutral'}`;
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key).push(u);
+  }
 
-    const typeRank = (t) => {
-      if (t === 'JumpShip') return 1;
-      if (t === 'Shipyard') return 2;
-      if (t === 'Lab') return 3;
-      if (t === 'Escort') return 4;
-      if (t === 'Blocker') return 5;
-      if (t === 'Striker') return 6;
-      if (t === 'Mine') return 7;
-      return 9;
-    };
+  const stacks = [];
+  for (const [key, list] of byKey.entries()) {
+    list.sort((a, b) => a.id - b.id);
+    stacks.push({ kind: 'stack', unit: list[0], units: list, sysId: sys.id, stackKey: key });
+  }
 
-    const items = [];
-    jumpships.slice().sort((a, b) => (a.faction || '').localeCompare(b.faction || '') || a.id - b.id)
-      .forEach(u => items.push({ kind: 'unit', unit: u, units: [u], sysId: sys.id, stackKey: null }));
+  const typeRank = (t) => {
+    // put shipyards near the top like important stuff
+    if (t === 'JumpShip') return 1;
+    if (t === 'Shipyard') return 2;
+    if (t === 'Lab') return 3;
+    if (t === 'Escort') return 4;
+    if (t === 'Blocker') return 5;
+    if (t === 'Striker') return 6;
+    if (t === 'Mine') return 7;
+    return 9;
+  };
 
-    stacks.slice().sort((a, b) => {
+  const items = [];
+
+  // ✅ Add non-stacking units as individual items
+  nonStack
+    .slice()
+    .sort((a, b) => (a.faction || '').localeCompare(b.faction || '') || a.id - b.id)
+    .forEach(u => items.push({ kind: 'unit', unit: u, units: [u], sysId: sys.id, stackKey: null }));
+
+  // ✅ Add stack items
+  stacks
+    .slice()
+    .sort((a, b) => {
       const ra = typeRank(a.unit.type), rb = typeRank(b.unit.type);
       if (ra !== rb) return ra - rb;
       if ((a.unit.faction || '') !== (b.unit.faction || '')) return (a.unit.faction || '').localeCompare(b.unit.faction || '');
       return a.unit.id - b.unit.id;
-    }).forEach(s => items.push(s));
+    })
+    .forEach(s => items.push(s));
 
-    return items;
-  }
+  return items;
+}
 
   function drawSquare(x, y, s) { ctx.beginPath(); ctx.rect(x - s, y - s, s * 2, s * 2); }
   function drawDiamond(x, y, s) {
@@ -2141,5 +2153,6 @@ window.addEventListener('mouseup', async () => {
 
   init();
 })();
+
 
 
