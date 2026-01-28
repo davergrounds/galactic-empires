@@ -1626,13 +1626,29 @@ function drawJumpShipDestLines() {
 
     if (!u) { clearSelections(); return; }
 
-    if (u.type === 'Shipyard') {
-      selectedShipyard = (selectedShipyard && selectedShipyard.id === u.id) ? null : u;
-      updateBuildPanel();
-      showStatus('');
-      draw();
-      return;
+   if (u.type === 'Shipyard') {
+  const togglingOff = (selectedShipyard && selectedShipyard.id === u.id);
+
+  selectedShipyard = togglingOff ? null : u;
+
+  // ✅ ALSO select it as a unit so it can be loaded into a JumpShip
+  if (togglingOff) {
+    if (selectedUnit && selectedUnit.id === u.id) {
+      selectedUnit = null;
+      selectedUnitItem = null;
     }
+  } else {
+    selectedUnit = u;
+    selectedUnitItem = hit; // includes stack list in hit.units
+  }
+
+  updateBuildPanel();
+  updateCargoPanel(); // <-- important, enables the Load button when JumpShip is selected
+  showStatus('');
+  draw();
+  return;
+}
+
     if (u.type === 'Lab') {
       selectedLab = (selectedLab && selectedLab.id === u.id) ? null : u;
       updateResearchPanel();
@@ -1696,28 +1712,46 @@ function drawJumpShipDestLines() {
     draw();
   });
 
-  window.addEventListener('mouseup', async () => {
-    if (!game) { draggingPan = false; draggingJumpShip = null; return; }
+window.addEventListener('mouseup', async () => {
+  if (!game) { draggingPan = false; draggingJumpShip = null; return; }
 
-    if (draggingJumpShip) {
-      const sx = draggingJumpShip.mouseX;
-      const sy = draggingJumpShip.mouseY;
-      const unit = draggingJumpShip.unit;
+  if (draggingJumpShip) {
+    const sx = draggingJumpShip.mouseX;
+    const sy = draggingJumpShip.mouseY;
+    const unit = draggingJumpShip.unit;
 
-      draggingJumpShip = null;
-      draw();
+    draggingJumpShip = null;
+    draw();
 
-      const sys = findSystemAtScreen(sx, sy);
-      if (sys && unit && unit.systemId !== sys.id) {
-        const r = await apiMove(unit.id, sys.id).catch(() => null);
-        if (r?.success) showStatus(`Queued move: JumpShip #${unit.id} -> ${displaySysId(sys.id)} (dist ${r.distance}).`);
-        else showStatus(`Move failed: ${r?.error || 'network error'}`);
+    const sys = findSystemAtScreen(sx, sy);
+    if (sys && unit) {
+      // ✅ If you drop on the SAME system, treat it as "cancel destination"
+      if (unit.systemId === sys.id) {
+        const cancel = await apiMove(unit.id, unit.systemId).catch(() => null);
+        if (cancel?.success) showStatus(`Cancelled move for JumpShip #${unit.id}.`);
+        else showStatus(`Cancel failed: ${cancel?.error || 'network error'}`);
         await refresh(false);
+      } else {
+        // Normal move attempt
+        const r = await apiMove(unit.id, sys.id).catch(() => null);
+
+        if (r?.success) {
+          showStatus(`Queued move: JumpShip #${unit.id} -> ${displaySysId(sys.id)} (dist ${r.distance}).`);
+          await refresh(false);
+        } else {
+          // ✅ If out-of-range (or any fail), also cancel any previous destination
+          showStatus(`Move failed: ${r?.error || 'network error'} — cancelling queued destination.`);
+          const cancel = await apiMove(unit.id, unit.systemId).catch(() => null);
+          if (cancel?.success) showStatus(`Move cancelled for JumpShip #${unit.id}.`);
+          await refresh(false);
+        }
       }
     }
+  }
 
-    draggingPan = false;
-  });
+  draggingPan = false;
+});
+
 
   /* =========================================================
      ZOOM
@@ -2107,4 +2141,5 @@ function drawJumpShipDestLines() {
 
   init();
 })();
+
 
