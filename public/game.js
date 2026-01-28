@@ -490,17 +490,18 @@
   }
 
   async function apiGetState() {
-    const { gameId, code } = session;
-    const url = `/games/${encodeURIComponent(gameId)}/state?code=${encodeURIComponent(code)}`;
-    const res = await fetch(url);
-    return await res.json();
-  }
+  const { gameId, code } = session;
+  const url = `/games/${encodeURIComponent(gameId)}/state?code=${encodeURIComponent(code)}`;
+  const res = await fetch(url);
+  return await readJsonSafe(res);
+}
 
   async function apiTurnStatus() {
     const { gameId, code } = session;
     const url = `/games/${encodeURIComponent(gameId)}/turn/status?code=${encodeURIComponent(code)}`;
     const res = await fetch(url);
-    return await res.json();
+    return await readJsonSafe(res);
+
   }
 
   async function apiReadyTurn(setValue) {
@@ -545,6 +546,16 @@
     return await res.json();
   }
 
+  async function readJsonSafe(res) {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { success: false, error: text || `HTTP ${res.status}` };
+  }
+}
+
+  
   async function apiQueueBuild(shipyardId, units) {
     const { gameId, code } = session;
     const res = await fetch(`/games/${encodeURIComponent(gameId)}/order/produce`, {
@@ -1329,68 +1340,6 @@ function drawJumpShipDestLines() {
 }
 
 
-  // ✅ FIX: server uses `inTransit` for destination
-  function getUnitDestinationSystemId(u) {
-    if (!u) return null;
-    return (
-      u.inTransit ??                // <-- main one
-      u.destinationSystemId ??
-      u.destSystemId ??
-      u.toSystemId ??
-      u.moveToSystemId ??
-      u.moveTo ??
-      u.order?.toSystemId ??
-      u.order?.moveToSystemId ??
-      u.orders?.move?.toSystemId ??
-      null
-    );
-  }
-
-  function drawJumpShipDestLines() {
-    if (!game?.units || !game?.systems) return;
-
-    ctx.save();
-    ctx.lineWidth = 2;
-    ctx.setLineDash([6, 4]);
-
-    for (const u of game.units) {
-      if (u.type !== 'JumpShip') continue;
-
-      const toId = getUnitDestinationSystemId(u);
-      if (!toId || toId === u.systemId) continue;
-
-      const fromSys = getSystem(u.systemId);
-      const toSys = getSystem(toId);
-      if (!fromSys || !toSys) continue;
-
-      const a = worldToScreen(fromSys.x, fromSys.y);
-      const b = worldToScreen(toSys.x, toSys.y);
-
-      const col = FACTION_COLOR[u.faction] || '#fff';
-      ctx.strokeStyle = col;
-      ctx.globalAlpha = 0.55;
-
-      ctx.beginPath();
-      ctx.moveTo(a.x, a.y);
-      ctx.lineTo(b.x, b.y);
-      ctx.stroke();
-
-      // Arrow head
-      const ang = Math.atan2(b.y - a.y, b.x - a.x);
-      const ah = 10;
-      ctx.fillStyle = col;
-      ctx.globalAlpha = 0.45;
-      ctx.beginPath();
-      ctx.moveTo(b.x, b.y);
-      ctx.lineTo(b.x - Math.cos(ang - 0.4) * ah, b.y - Math.sin(ang - 0.4) * ah);
-      ctx.lineTo(b.x - Math.cos(ang + 0.4) * ah, b.y - Math.sin(ang + 0.4) * ah);
-      ctx.closePath();
-      ctx.fill();
-    }
-
-    ctx.restore();
-  }
-
   function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = 'black';
@@ -1994,15 +1943,78 @@ window.addEventListener('mouseup', async () => {
     }
   }
 
-  async function refresh(force) {
-    if (!requireSessionOrOverlay()) return;
+async function refresh(force) {
+  if (!requireSessionOrOverlay()) return;
 
-    const r = await apiGetState().catch(() => null);
-    if (!r?.success) {
-      showStatus(`Could not load state: ${r?.error || 'network error'}`);
-      openOverlay();
-      return;
-    }
+  const r = await apiGetState().catch(() => null);
+  if (!r) {
+    showStatus('Could not load state: network error');
+    return;
+  }
+
+  // If server returns {success:false,...}
+  if (r.success === false) {
+    showStatus(`Could not load state: ${r.error || 'unknown error'}`);
+    return;
+  }
+
+  // Accept either:
+  // 1) {success:true, ...state}
+  // 2) {success:true, state:{...}}
+  // 3) raw state
+  const state =
+    (r && typeof r === 'object' && r.state && typeof r.state === 'object')
+      ? r.state
+      : r;
+
+  game = state;
+  yourFaction = state.yourFaction;
+
+  ensureSysNameMap();
+
+  if (turnEl) turnEl.textContent = `Turn: ${game.turn}`;
+  if (viewerEl) viewerEl.textContent = `You: ${yourFaction}`;
+  if (gameInfoEl) gameInfoEl.textContent = `Game: ${session.gameId}`;
+  updateReadyStatus();
+
+  if (readyTurnBtn) readyTurnBtn.disabled = !!game?.gameOver;
+  if (resignBtn) resignBtn.disabled = !!game?.gameOver;
+
+  // Rebind selections by id
+  if (selectedShipyard) selectedShipyard = game.units.find(u => u.type === 'Shipyard' && u.id === selectedShipyard.id) || null;
+  if (selectedJumpShip) selectedJumpShip = game.units.find(u => u.type === 'JumpShip' && u.id === selectedJumpShip.id) || null;
+  if (selectedLab) selectedLab = game.units.find(u => u.type === 'Lab' && u.id === selectedLab.id) || null;
+  if (selectedUnit) selectedUnit = game.units.find(u => u.id === selectedUnit.id) || null;
+
+  // Rebind stack selection after refresh
+  if (selectedUnit) {
+    const sysId = selectedUnit.systemId;
+    const type = selectedUnit.type;
+    const faction = selectedUnit.faction;
+    const unitsHere = game.units.filter(x => x.systemId === sysId && x.type === type && x.faction === faction);
+    selectedUnitItem = { unit: selectedUnit, units: unitsHere };
+  } else {
+    selectedUnitItem = null;
+  }
+
+  if (selectedJumpShip) {
+    const arr = Array.isArray(selectedJumpShip.cargo) ? selectedJumpShip.cargo : [];
+    if (selectedCargoIndex != null && (selectedCargoIndex < 0 || selectedCargoIndex >= arr.length)) selectedCargoIndex = null;
+  } else selectedCargoIndex = null;
+
+  updateBuildPanel();
+  updateCargoPanel();
+  updateResearchPanel();
+  renderTechLevels();
+  renderReport();
+  draw();
+
+  if (game?.gameOver) {
+    showStatus(`GAME OVER. Winner: ${game.winner ?? 'draw'}`);
+    showEndgameOverlay();
+  }
+}
+
 
     game = r;
     yourFaction = r.yourFaction;
@@ -2153,6 +2165,7 @@ window.addEventListener('mouseup', async () => {
 
   init();
 })();
+
 
 
 
