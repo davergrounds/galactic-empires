@@ -124,6 +124,16 @@ function randomInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 function mapIsJumpConnected(systems, maxRange = JUMPSHIP_MOVE_RANGE) {
+  if (!Array.isArray(systems) || systems.length === 0) {
+  return false;
+}
+
+for (const s of systems) {
+  if (s.id == null || s.x == null || s.y == null) {
+    return false;
+  }
+}
+
   if (systems.length === 0) return true;
 
   // Build adjacency list
@@ -300,8 +310,10 @@ function createGameRecord(cfg) {
   );
 
   if (attempts >= 50) {
-    console.warn('WARNING: Could not generate a fully jump-connected map');
-  }
+  throw new Error('Failed to generate a jump-connected map');
+}
+
+
 
   const rec = {
     game,
@@ -1284,4 +1296,5 @@ app.post('/games/:gameId/order/research', (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
+
 
