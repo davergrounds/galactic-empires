@@ -123,6 +123,42 @@ function createUnit(type, faction, systemId, nextIdRef) {
 function randomInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
+function mapIsJumpConnected(systems, maxRange = JUMPSHIP_MOVE_RANGE) {
+  if (systems.length === 0) return true;
+
+  // Build adjacency list
+  const adj = new Map();
+  for (const s of systems) adj.set(s.id, []);
+
+  for (let i = 0; i < systems.length; i++) {
+    for (let j = i + 1; j < systems.length; j++) {
+      const a = systems[i];
+      const b = systems[j];
+      if (manhattanDistance(a, b) <= maxRange) {
+        adj.get(a.id).push(b.id);
+        adj.get(b.id).push(a.id);
+      }
+    }
+  }
+
+  // BFS from first system
+  const visited = new Set();
+  const queue = [systems[0].id];
+  visited.add(systems[0].id);
+
+  while (queue.length) {
+    const id = queue.shift();
+    for (const n of adj.get(id)) {
+      if (!visited.has(n)) {
+        visited.add(n);
+        queue.push(n);
+      }
+    }
+  }
+
+  // All systems must be reachable
+  return visited.size === systems.length;
+}
 
 // All systems are SYS-XX
 function makeSystemId(prefix, n) {
@@ -252,8 +288,23 @@ function createGameRecord(cfg) {
   const joinCodeIthaxi = randToken(12);
   const joinCodeHive = randToken(12);
 
+  let game;
+  let attempts = 0;
+
+  do {
+    game = generateNewGame(cfg || {});
+    attempts++;
+  } while (
+    !mapIsJumpConnected(game.systems) &&
+    attempts < 50
+  );
+
+  if (attempts >= 50) {
+    console.warn('WARNING: Could not generate a fully jump-connected map');
+  }
+
   const rec = {
-    game: generateNewGame(cfg || {}),
+    game,
     joinCodes: { ithaxi: joinCodeIthaxi, hive: joinCodeHive },
     createdAt: Date.now()
   };
@@ -262,9 +313,6 @@ function createGameRecord(cfg) {
   return { gameId, joinCodeIthaxi, joinCodeHive };
 }
 
-function getGameRecord(gameId) {
-  return games.get(String(gameId || '').trim()) || null;
-}
 
 function factionFromCode(rec, code) {
   const c = String(code || '').trim();
@@ -1236,3 +1284,4 @@ app.post('/games/:gameId/order/research', (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
+
